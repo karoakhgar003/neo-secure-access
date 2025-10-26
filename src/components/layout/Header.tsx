@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { ShoppingCart, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/neo-logo.png";
 
 const Header = () => {
+  const { user } = useAuth();
   return (
     <header className="sticky top-0 z-50 w-full glass-card border-b border-border/50">
       <div className="container mx-auto px-4 py-4">
@@ -45,12 +47,21 @@ const Header = () => {
                 </span>
               </Button>
             </Link>
-            <Link to="/account">
-              <Button variant="outline" className="gap-2 glass-card hover:bg-primary/10 border-primary/30">
-                <User className="h-4 w-4" />
-                <span className="hidden sm:inline">ورود / ثبت‌نام</span>
-              </Button>
-            </Link>
+            {user ? (
+              <Link to="/account">
+                <Button variant="outline" className="gap-2 glass-card hover:bg-primary/10 border-primary/30">
+                  <User className="h-4 w-4" />
+                  <span className="hidden sm:inline">حساب کاربری</span>
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth">
+                <Button variant="hero" className="gap-2">
+                  <User className="h-4 w-4" />
+                  <span className="hidden sm:inline">ورود / ثبت‌نام</span>
+                </Button>
+              </Link>
+            )}
             <Button variant="ghost" size="icon" className="md:hidden">
               <Menu className="h-5 w-5" />
             </Button>

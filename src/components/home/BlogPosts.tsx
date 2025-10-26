@@ -1,39 +1,51 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, ArrowLeft } from "lucide-react";
-
-const posts = [
-  {
-    id: 1,
-    title: "راهنمای خرید اکانت یوتیوب پریمیوم",
-    slug: "youtube-premium-guide",
-    excerpt: "همه چیز درباره خرید و استفاده از اکانت یوتیوب پریمیوم",
-    date: "۱۵ دی ۱۴۰۳",
-    image: "https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=400&h=300&fit=crop",
-    category: "آموزش",
-  },
-  {
-    id: 2,
-    title: "مزایای استفاده از اکانت‌های دیجیتال",
-    slug: "digital-accounts-benefits",
-    excerpt: "چرا باید از اکانت‌های دیجیتال استفاده کنیم؟",
-    date: "۱۲ دی ۱۴۰۳",
-    image: "https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=400&h=300&fit=crop",
-    category: "راهنما",
-  },
-  {
-    id: 3,
-    title: "نکات امنیتی خرید آنلاین اکانت",
-    slug: "online-security-tips",
-    excerpt: "چگونه با امنیت کامل اکانت خریداری کنیم",
-    date: "۱۰ دی ۱۴۰۳",
-    image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=300&fit=crop",
-    category: "نکات",
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
 
 const BlogPosts = () => {
+  const { data: posts, isLoading } = useQuery({
+    queryKey: ["blog-posts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .eq("published", true)
+        .limit(3)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const formatDate = (dateString: string) => {
+    // Simple date formatting - you can use a library like date-fns-jalali for proper Jalali dates
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fa-IR');
+  };
+
+  if (isLoading) {
+    return (
+      <section className="py-20 bg-gradient-to-b from-card/50 to-background">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">
+              آخرین <span className="gradient-primary bg-clip-text text-transparent">مطالب</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="glass-card h-96 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20 bg-gradient-to-b from-card/50 to-background">
       <div className="container mx-auto px-4">
@@ -47,28 +59,32 @@ const BlogPosts = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts.map((post, index) => (
+          {posts?.map((post, index) => (
             <div
               key={post.id}
               style={{ animationDelay: `${index * 100}ms` }}
               className="animate-fade-in"
             >
               <Card className="glass-card hover-lift overflow-hidden border-primary/20 h-full flex flex-col">
-                <div className="relative overflow-hidden group">
-                  <img
-                    src={post.image}
-                    alt={post.title}
-                    className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute top-4 right-4 bg-primary/90 backdrop-blur px-3 py-1 rounded-full text-sm font-medium">
-                    {post.category}
+                {post.image_url && (
+                  <div className="relative overflow-hidden group">
+                    <img
+                      src={post.image_url}
+                      alt={post.title}
+                      className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                    {post.category && (
+                      <div className="absolute top-4 right-4 bg-primary/90 backdrop-blur px-3 py-1 rounded-full text-sm font-medium">
+                        {post.category}
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
                 <CardContent className="p-6 flex-1 flex flex-col">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm mb-3">
                     <Calendar className="h-4 w-4" />
-                    <span>{post.date}</span>
+                    <span>{formatDate(post.created_at)}</span>
                   </div>
 
                   <Link to={`/blog/${post.slug}`}>
@@ -77,9 +93,11 @@ const BlogPosts = () => {
                     </h3>
                   </Link>
 
-                  <p className="text-muted-foreground mb-4 line-clamp-2 flex-1">
-                    {post.excerpt}
-                  </p>
+                  {post.summary && (
+                    <p className="text-muted-foreground mb-4 line-clamp-2 flex-1">
+                      {post.summary}
+                    </p>
+                  )}
 
                   <Link to={`/blog/${post.slug}`}>
                     <Button variant="ghost" className="gap-2 p-0 h-auto hover:text-primary group">

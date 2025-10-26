@@ -1,59 +1,48 @@
 import { Link } from "react-router-dom";
-import { Youtube, Music, Film, Gamepad2, Mail, Cloud } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import * as Icons from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-
-const categories = [
-  {
-    id: 1,
-    title: "یوتیوب پریمیوم",
-    slug: "youtube-premium",
-    icon: Youtube,
-    count: "۱۵",
-    color: "from-red-500/20 to-red-600/20",
-  },
-  {
-    id: 2,
-    title: "اسپاتیفای",
-    slug: "spotify",
-    icon: Music,
-    count: "۱۲",
-    color: "from-green-500/20 to-green-600/20",
-  },
-  {
-    id: 3,
-    title: "نتفلیکس",
-    slug: "netflix",
-    icon: Film,
-    count: "۲۰",
-    color: "from-red-500/20 to-pink-600/20",
-  },
-  {
-    id: 4,
-    title: "ایکس‌باکس گیم پس",
-    slug: "xbox-gamepass",
-    icon: Gamepad2,
-    count: "۸",
-    color: "from-green-500/20 to-blue-600/20",
-  },
-  {
-    id: 5,
-    title: "جیمیل بیزینس",
-    slug: "gmail-business",
-    icon: Mail,
-    count: "۱۰",
-    color: "from-blue-500/20 to-purple-600/20",
-  },
-  {
-    id: 6,
-    title: "فضای ابری",
-    slug: "cloud-storage",
-    icon: Cloud,
-    count: "۶",
-    color: "from-cyan-500/20 to-blue-600/20",
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
 
 const Categories = () => {
+  const { data: categories, isLoading } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .order("created_at", { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const getIcon = (iconName: string | null) => {
+    if (!iconName) return Icons.Package;
+    const Icon = (Icons as any)[iconName];
+    return Icon || Icons.Package;
+  };
+
+  if (isLoading) {
+    return (
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">
+              دسته‌بندی <span className="gradient-primary bg-clip-text text-transparent">محصولات</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="glass-card h-40 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20">
       <div className="container mx-auto px-4">
@@ -67,8 +56,8 @@ const Categories = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {categories.map((category, index) => {
-            const Icon = category.icon;
+          {categories?.map((category, index) => {
+            const Icon = getIcon(category.icon);
             return (
               <Link
                 key={category.id}
@@ -78,15 +67,17 @@ const Categories = () => {
               >
                 <Card className="glass-card hover-lift group cursor-pointer border-primary/20 h-full">
                   <CardContent className="p-6">
-                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${category.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                      <Icon className="h-8 w-8 text-foreground" />
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Icon className="h-8 w-8 text-primary" />
                     </div>
                     <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">
-                      {category.title}
+                      {category.name}
                     </h3>
-                    <p className="text-muted-foreground text-sm">
-                      {category.count} محصول موجود
-                    </p>
+                    {category.description && (
+                      <p className="text-muted-foreground text-sm line-clamp-2">
+                        {category.description}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
