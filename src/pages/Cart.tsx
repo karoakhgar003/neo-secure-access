@@ -5,32 +5,56 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Trash2, Plus, Minus, ShoppingCart, Tag } from "lucide-react";
+import { useCart } from "@/hooks/useCart";
+import { useAuth } from "@/hooks/useAuth";
 
 const Cart = () => {
-  const cartItems = [
-    {
-      id: 1,
-      title: "یوتیوب پریمیوم - اشتراک ۱ ماهه",
-      price: 195000,
-      quantity: 1,
-      image: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=200&h=150&fit=crop",
-    },
-    {
-      id: 2,
-      title: "نتفلیکس پریمیوم - اشتراک ۱ ماهه",
-      price: 150000,
-      quantity: 2,
-      image: "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=200&h=150&fit=crop",
-    },
-  ];
-
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = 0;
-  const total = subtotal - discount;
+  const { cartItems, loading, updateQuantity, removeFromCart, cartTotal } = useCart();
+  const { user } = useAuth();
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('fa-IR');
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <Card className="glass-card border-primary/20 text-center py-12">
+            <CardContent>
+              <ShoppingCart className="h-24 w-24 mx-auto mb-4 text-muted-foreground" />
+              <h2 className="text-2xl font-bold mb-2">برای مشاهده سبد خرید وارد شوید</h2>
+              <p className="text-muted-foreground mb-6">
+                لطفا ابتدا وارد حساب کاربری خود شوید
+              </p>
+              <Link to="/auth">
+                <Button variant="hero">ورود / ثبت‌نام</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const discount = 0;
+  const total = cartTotal - discount;
 
   return (
     <div className="min-h-screen">
@@ -62,26 +86,41 @@ const Cart = () => {
                   <CardContent className="p-6">
                     <div className="flex gap-4">
                       <img
-                        src={item.image}
-                        alt={item.title}
+                        src={item.products.image_url || 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=200&h=150&fit=crop'}
+                        alt={item.products.name}
                         className="w-24 h-24 rounded-lg object-cover"
                       />
                       <div className="flex-1">
-                        <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                        <h3 className="font-bold text-lg mb-2">{item.products.name}</h3>
                         <p className="text-primary font-bold text-xl">
-                          {formatPrice(item.price)} تومان
+                          {formatPrice(Number(item.products.price))} تومان
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-4">
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeFromCart(item.id)}
+                        >
                           <Trash2 className="h-5 w-5" />
                         </Button>
                         <div className="flex items-center glass-card border border-primary/20 rounded-lg">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          >
                             <Minus className="h-4 w-4" />
                           </Button>
                           <span className="px-4 font-bold">{item.quantity}</span>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          >
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
@@ -101,7 +140,7 @@ const Cart = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between text-muted-foreground">
                       <span>جمع جزء</span>
-                      <span>{formatPrice(subtotal)} تومان</span>
+                      <span>{formatPrice(cartTotal)} تومان</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
                       <span>تخفیف</span>
