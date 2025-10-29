@@ -4,7 +4,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Package, FileText, ShoppingCart } from 'lucide-react';
+import { Users, Package, FileText, ShoppingCart, FolderTree } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function AdminDashboard() {
@@ -12,23 +12,26 @@ export default function AdminDashboard() {
     users: 0,
     products: 0,
     blogPosts: 0,
-    orders: 0
+    orders: 0,
+    categories: 0
   });
 
   useEffect(() => {
     const loadStats = async () => {
-      const [usersRes, productsRes, postsRes, ordersRes] = await Promise.all([
+      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('blog_posts').select('id', { count: 'exact', head: true }),
-        supabase.from('orders').select('id', { count: 'exact', head: true })
+        supabase.from('orders').select('id', { count: 'exact', head: true }),
+        supabase.from('categories').select('id', { count: 'exact', head: true })
       ]);
 
       setStats({
         users: usersRes.count || 0,
         products: productsRes.count || 0,
         blogPosts: postsRes.count || 0,
-        orders: ordersRes.count || 0
+        orders: ordersRes.count || 0,
+        categories: categoriesRes.count || 0
       });
     };
 
@@ -130,6 +133,16 @@ export default function AdminDashboard() {
                 <ShoppingCart className="h-12 w-12 text-primary mb-4" />
                 <h2 className="text-2xl font-bold mb-2">مدیریت سفارشات</h2>
                 <p className="text-muted-foreground">مشاهده و مدیریت سفارشات</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/admin/categories">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
+              <CardContent className="p-6">
+                <FolderTree className="h-12 w-12 text-primary mb-4" />
+                <h2 className="text-2xl font-bold mb-2">مدیریت دسته‌بندی‌ها</h2>
+                <p className="text-muted-foreground">افزودن و ویرایش دسته‌بندی‌ها</p>
               </CardContent>
             </Card>
           </Link>

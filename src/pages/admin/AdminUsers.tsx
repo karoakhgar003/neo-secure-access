@@ -5,9 +5,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Shield } from 'lucide-react';
+import { ArrowLeft, Shield, Edit, Trash2, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 interface UserProfile {
   id: string;
@@ -15,12 +20,16 @@ interface UserProfile {
   phone: string | null;
   telegram_username: string | null;
   created_at: string;
-  user_roles: { role: string }[];
+  user_roles: { role: string; id: string }[];
 }
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: '', phone: '', telegram_username: '', role: 'user' });
+  const { toast } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -43,7 +52,7 @@ export default function AdminUsers() {
       (data || []).map(async (user) => {
         const { data: roles } = await supabase
           .from('user_roles')
-          .select('role')
+          .select('role, id')
           .eq('user_id', user.id);
 
         return {
@@ -55,6 +64,70 @@ export default function AdminUsers() {
 
     setUsers(usersWithRoles as UserProfile[]);
     setLoading(false);
+  };
+
+  const handleEdit = (user: UserProfile) => {
+    setSelectedUser(user);
+    setEditForm({
+      full_name: user.full_name || '',
+      phone: user.phone || '',
+      telegram_username: user.telegram_username || '',
+      role: user.user_roles.length > 0 ? user.user_roles[0].role : 'user'
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!selectedUser) return;
+
+    // Update profile
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: editForm.full_name,
+        phone: editForm.phone,
+        telegram_username: editForm.telegram_username
+      })
+      .eq('id', selectedUser.id);
+
+    if (profileError) {
+      toast({ title: 'خطا', description: 'ذخیره‌سازی انجام نشد', variant: 'destructive' });
+      return;
+    }
+
+    // Update role
+    if (selectedUser.user_roles.length > 0) {
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', selectedUser.id);
+    }
+
+    if (editForm.role === 'admin') {
+      await supabase
+        .from('user_roles')
+        .insert({ user_id: selectedUser.id, role: 'admin' });
+    }
+
+    toast({ title: 'موفق', description: 'تغییرات ذخیره شد' });
+    setDialogOpen(false);
+    loadUsers();
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (!confirm('آیا مطمئن هستید؟ این عملیات قابل بازگشت نیست.')) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (error) {
+      toast({ title: 'خطا', description: 'حذف انجام نشد', variant: 'destructive' });
+    } else {
+      toast({ title: 'موفق', description: 'کاربر حذف شد' });
+      loadUsers();
+    }
   };
 
   return (
@@ -88,6 +161,7 @@ export default function AdminUsers() {
                     <TableHead>تلگرام</TableHead>
                     <TableHead>نقش</TableHead>
                     <TableHead>تاریخ ثبت‌نام</TableHead>
+                    <TableHead>عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -111,6 +185,16 @@ export default function AdminUsers() {
                       <TableCell>
                         {new Date(user.created_at).toLocaleDateString('fa-IR')}
                       </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -118,6 +202,52 @@ export default function AdminUsers() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>ویرایش کاربر</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>نام کامل</Label>
+                <Input
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>تلفن</Label>
+                <Input
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>نام کاربری تلگرام</Label>
+                <Input
+                  value={editForm.telegram_username}
+                  onChange={(e) => setEditForm({ ...editForm, telegram_username: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>نقش</Label>
+                <Select value={editForm.role} onValueChange={(value) => setEditForm({ ...editForm, role: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">کاربر</SelectItem>
+                    <SelectItem value="admin">مدیر</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="hero" onClick={handleSave} className="w-full">
+                ذخیره تغییرات
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
       <Footer />
     </div>
