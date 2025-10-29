@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, Menu, User, Shield } from "lucide-react";
+import { ShoppingCart, Menu, User, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
@@ -7,7 +7,7 @@ import { useAdmin } from "@/hooks/useAdmin";
 import logo from "@/assets/neo-logo.png";
 
 const Header = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { cartCount } = useCart();
   const { isAdmin } = useAdmin();
 
@@ -55,6 +55,10 @@ const Header = () => {
                     <span className="hidden sm:inline">حساب کاربری</span>
                   </Button>
                 </Link>
+                <Button variant="ghost" className="gap-2" onClick={signOut}>
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">خروج</span>
+                </Button>
               </>
             ) : (
               <Link to="/auth">

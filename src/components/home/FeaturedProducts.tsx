@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
+import { useCart } from "@/hooks/useCart";
 const FeaturedProducts = () => {
   const { data: products, isLoading } = useQuery({
     queryKey: ["featured-products"],
@@ -21,6 +21,7 @@ const FeaturedProducts = () => {
       return data;
     }
   });
+  const { addToCart } = useCart();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('fa-IR').format(price);
@@ -100,7 +101,7 @@ const FeaturedProducts = () => {
                 </CardContent>
 
                 <CardFooter className="p-6 pt-0">
-                  <Button variant="hero" className="w-full group">
+                  <Button variant="hero" className="w-full group" onClick={() => addToCart(product.id, 1)}>
                     <ShoppingCart className="ml-2 h-4 w-4 group-hover:scale-110 transition-transform" />
                     افزودن به سبد خرید
                   </Button>
