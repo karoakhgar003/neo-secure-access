@@ -6,8 +6,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface Order {
   id: string;
@@ -17,11 +20,20 @@ interface Order {
   contact_email: string;
   created_at: string;
   profiles: { full_name: string | null };
+  order_items?: {
+    product_id: string;
+    quantity: number;
+    price: number;
+    products: { name: string; image_url: string };
+  }[];
 }
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadOrders();
@@ -58,9 +70,37 @@ export default function AdminOrders() {
     setLoading(false);
   };
 
+  const handleViewDetails = async (order: Order) => {
+    const { data } = await supabase
+      .from('order_items')
+      .select('product_id, quantity, price, products(name, image_url)')
+      .eq('order_id', order.id);
+    
+    setSelectedOrder({ ...order, order_items: data as any });
+    setDialogOpen(true);
+  };
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
+
+    if (error) {
+      toast({ title: 'خطا', description: 'تغییر وضعیت انجام نشد', variant: 'destructive' });
+    } else {
+      toast({ title: 'موفق', description: 'وضعیت سفارش تغییر کرد' });
+      loadOrders();
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, status: newStatus });
+      }
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", label: string }> = {
       pending: { variant: "secondary", label: "در انتظار" },
+      processing: { variant: "outline", label: "در حال پردازش" },
       completed: { variant: "default", label: "تکمیل شده" },
       cancelled: { variant: "destructive", label: "لغو شده" }
     };
@@ -101,6 +141,7 @@ export default function AdminOrders() {
                     <TableHead>مبلغ</TableHead>
                     <TableHead>وضعیت</TableHead>
                     <TableHead>تاریخ</TableHead>
+                    <TableHead>عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -114,6 +155,11 @@ export default function AdminOrders() {
                       <TableCell>
                         {new Date(order.created_at).toLocaleDateString('fa-IR')}
                       </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleViewDetails(order)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -121,6 +167,73 @@ export default function AdminOrders() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>جزئیات سفارش {selectedOrder?.order_number}</DialogTitle>
+            </DialogHeader>
+            {selectedOrder && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">مشتری</p>
+                    <p className="font-medium">{selectedOrder.profiles.full_name || 'نامشخص'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">ایمیل</p>
+                    <p className="font-medium">{selectedOrder.contact_email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">مبلغ کل</p>
+                    <p className="font-medium">{Number(selectedOrder.total_amount).toLocaleString('fa-IR')} تومان</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">تاریخ</p>
+                    <p className="font-medium">{new Date(selectedOrder.created_at).toLocaleDateString('fa-IR')}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">وضعیت سفارش</p>
+                  <Select value={selectedOrder.status} onValueChange={(value) => handleStatusChange(selectedOrder.id, value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">در انتظار</SelectItem>
+                      <SelectItem value="processing">در حال پردازش</SelectItem>
+                      <SelectItem value="completed">تکمیل شده</SelectItem>
+                      <SelectItem value="cancelled">لغو شده</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <h3 className="font-bold mb-4">محصولات سفارش</h3>
+                  <div className="space-y-3">
+                    {selectedOrder.order_items?.map((item, idx) => (
+                      <div key={idx} className="flex gap-4 p-3 rounded-lg glass-card border border-primary/20">
+                        <img
+                          src={item.products.image_url || '/placeholder.svg'}
+                          alt={item.products.name}
+                          className="w-16 h-16 rounded object-cover"
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium">{item.products.name}</p>
+                          <p className="text-sm text-muted-foreground">تعداد: {item.quantity}</p>
+                        </div>
+                        <p className="font-bold text-primary">
+                          {Number(item.price).toLocaleString('fa-IR')} تومان
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
       <Footer />
     </div>

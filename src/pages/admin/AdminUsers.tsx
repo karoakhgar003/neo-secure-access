@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 interface UserProfile {
   id: string;
   full_name: string | null;
+  email: string | null;
   phone: string | null;
   telegram_username: string | null;
   created_at: string;
@@ -38,7 +39,7 @@ export default function AdminUsers() {
   const loadUsers = async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, telegram_username, created_at')
+      .select('id, full_name, email, phone, telegram_username, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -157,6 +158,7 @@ export default function AdminUsers() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>نام کامل</TableHead>
+                    <TableHead>ایمیل</TableHead>
                     <TableHead>تلفن</TableHead>
                     <TableHead>تلگرام</TableHead>
                     <TableHead>نقش</TableHead>
@@ -170,6 +172,7 @@ export default function AdminUsers() {
                       <TableCell className="font-medium">
                         {user.full_name || 'نامشخص'}
                       </TableCell>
+                      <TableCell>{user.email || '-'}</TableCell>
                       <TableCell>{user.phone || '-'}</TableCell>
                       <TableCell>{user.telegram_username || '-'}</TableCell>
                       <TableCell>

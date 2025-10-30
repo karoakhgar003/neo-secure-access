@@ -4,9 +4,11 @@ import Footer from "@/components/layout/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Download, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface Order {
   id: string;
@@ -27,8 +29,11 @@ interface Order {
 
 const AccountOrders = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -88,6 +93,38 @@ const AccountOrders = () => {
     }
   };
 
+  const handleViewDetails = (order: Order) => {
+    setSelectedOrder(order);
+    setDialogOpen(true);
+  };
+
+  const handleDownload = (order: Order) => {
+    const orderData = {
+      order_number: order.order_number,
+      date: new Date(order.created_at).toLocaleDateString('fa-IR'),
+      total: order.total_amount,
+      status: getStatusText(order.status),
+      items: order.order_items.map(item => ({
+        product: item.products.name,
+        quantity: item.quantity,
+        price: item.price
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(orderData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `order-${order.order_number}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'موفق',
+      description: 'اطلاعات سفارش دانلود شد'
+    });
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -144,11 +181,12 @@ const AccountOrders = () => {
                         </div>
                         
                         <div className="flex gap-3">
-                          <Button variant="hero" size="sm" className="gap-2">
+                          <Button variant="hero" size="sm" className="gap-2" onClick={() => handleDownload(order)}>
                             <Download className="h-4 w-4" />
                             دانلود اطلاعات
                           </Button>
-                          <Button variant="outline" size="sm" className="glass-card border-primary/30">
+                          <Button variant="outline" size="sm" className="glass-card border-primary/30 gap-2" onClick={() => handleViewDetails(order)}>
+                            <Eye className="h-4 w-4" />
                             جزئیات سفارش
                           </Button>
                         </div>
@@ -160,6 +198,65 @@ const AccountOrders = () => {
             ))}
           </div>
         )}
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>جزئیات سفارش {selectedOrder?.order_number}</DialogTitle>
+            </DialogHeader>
+            {selectedOrder && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">شماره سفارش</p>
+                    <p className="font-medium">{selectedOrder.order_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">تاریخ</p>
+                    <p className="font-medium">{new Date(selectedOrder.created_at).toLocaleDateString('fa-IR')}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">وضعیت</p>
+                    <Badge className={getStatusBadge(selectedOrder.status)}>
+                      {getStatusText(selectedOrder.status)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">مبلغ کل</p>
+                    <p className="font-medium text-primary">{selectedOrder.total_amount.toLocaleString('fa-IR')} تومان</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-bold mb-4">محصولات سفارش</h3>
+                  <div className="space-y-3">
+                    {selectedOrder.order_items.map((item, idx) => (
+                      <div key={idx} className="flex gap-4 p-3 rounded-lg glass-card border border-primary/20">
+                        <img
+                          src={item.products.image_url || '/placeholder.svg'}
+                          alt={item.products.name}
+                          className="w-20 h-20 rounded object-cover"
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium text-lg">{item.products.name}</p>
+                          <p className="text-sm text-muted-foreground">تعداد: {item.quantity}</p>
+                          <p className="text-sm text-muted-foreground">
+                            قیمت واحد: {Number(item.price).toLocaleString('fa-IR')} تومان
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold text-primary text-lg">
+                            {(Number(item.price) * item.quantity).toLocaleString('fa-IR')} تومان
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
       <Footer />
     </div>
