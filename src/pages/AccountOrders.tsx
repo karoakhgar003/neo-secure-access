@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Eye } from "lucide-react";
+import { Download, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +16,7 @@ interface Order {
   created_at: string;
   status: string;
   total_amount: number;
+  admin_notes?: string | null;
   order_items: {
     product_id: string;
     quantity: number;
@@ -50,6 +51,7 @@ const AccountOrders = () => {
         created_at,
         status,
         total_amount,
+        admin_notes,
         order_items (
           product_id,
           quantity,
@@ -253,6 +255,16 @@ const AccountOrders = () => {
                     ))}
                   </div>
                 </div>
+
+                {selectedOrder.admin_notes && (
+                  <div className="glass-card border border-primary/30 p-4 rounded-lg bg-primary/5">
+                    <h3 className="font-bold mb-2 flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-primary" />
+                      اطلاعات تحویل از طرف مدیر
+                    </h3>
+                    <p className="text-sm whitespace-pre-wrap">{selectedOrder.admin_notes}</p>
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>

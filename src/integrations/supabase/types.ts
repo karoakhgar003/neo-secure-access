@@ -165,6 +165,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          admin_notes: string | null
           contact_email: string
           contact_phone: string | null
           created_at: string
@@ -176,6 +177,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_notes?: string | null
           contact_email: string
           contact_phone?: string | null
           created_at?: string
@@ -187,6 +189,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_notes?: string | null
           contact_email?: string
           contact_phone?: string | null
           created_at?: string

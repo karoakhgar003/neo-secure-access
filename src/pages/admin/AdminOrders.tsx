@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +21,7 @@ interface Order {
   status: string;
   contact_email: string;
   created_at: string;
+  admin_notes?: string | null;
   profiles: { full_name: string | null };
   order_items?: {
     product_id: string;
@@ -33,6 +36,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [adminNotes, setAdminNotes] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,7 +46,7 @@ export default function AdminOrders() {
   const loadOrders = async () => {
     const { data, error } = await supabase
       .from('orders')
-      .select('id, order_number, total_amount, status, contact_email, created_at, user_id')
+      .select('id, order_number, total_amount, status, contact_email, created_at, user_id, admin_notes')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -77,6 +81,7 @@ export default function AdminOrders() {
       .eq('order_id', order.id);
     
     setSelectedOrder({ ...order, order_items: data as any });
+    setAdminNotes(order.admin_notes || '');
     setDialogOpen(true);
   };
 
@@ -94,6 +99,23 @@ export default function AdminOrders() {
       if (selectedOrder?.id === orderId) {
         setSelectedOrder({ ...selectedOrder, status: newStatus });
       }
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!selectedOrder) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ admin_notes: adminNotes })
+      .eq('id', selectedOrder.id);
+
+    if (error) {
+      toast({ title: 'خطا', description: 'ذخیره یادداشت انجام نشد', variant: 'destructive' });
+    } else {
+      toast({ title: 'موفق', description: 'یادداشت ذخیره شد' });
+      loadOrders();
+      setSelectedOrder({ ...selectedOrder, admin_notes: adminNotes });
     }
   };
 
@@ -207,6 +229,20 @@ export default function AdminOrders() {
                       <SelectItem value="cancelled">لغو شده</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="admin-notes">یادداشت مدیر (اطلاعات تحویل، اعتبارنامه، راهنمایی)</Label>
+                  <Textarea
+                    id="admin-notes"
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    placeholder="اطلاعات تحویل، اعتبارنامه یا راهنمایی برای کاربر را وارد کنید..."
+                    className="mt-2 min-h-[100px]"
+                  />
+                  <Button variant="hero" onClick={handleSaveNotes} className="mt-3 w-full">
+                    ذخیره یادداشت
+                  </Button>
                 </div>
 
                 <div>
