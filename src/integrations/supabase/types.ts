@@ -202,6 +202,50 @@ export type Database = {
         }
         Relationships: []
       }
+      product_credentials: {
+        Row: {
+          additional_info: Json | null
+          assigned_at: string | null
+          assigned_to_order_item_id: string | null
+          created_at: string
+          id: string
+          is_assigned: boolean | null
+          password: string
+          product_id: string
+          username: string
+        }
+        Insert: {
+          additional_info?: Json | null
+          assigned_at?: string | null
+          assigned_to_order_item_id?: string | null
+          created_at?: string
+          id?: string
+          is_assigned?: boolean | null
+          password: string
+          product_id: string
+          username: string
+        }
+        Update: {
+          additional_info?: Json | null
+          assigned_at?: string | null
+          assigned_to_order_item_id?: string | null
+          created_at?: string
+          id?: string
+          is_assigned?: boolean | null
+          password?: string
+          product_id?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_credentials_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category_id: string

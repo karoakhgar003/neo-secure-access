@@ -4,7 +4,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Package, FileText, ShoppingCart, FolderTree } from 'lucide-react';
+import { Users, Package, FileText, ShoppingCart, FolderTree, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function AdminDashboard() {
@@ -143,6 +143,16 @@ export default function AdminDashboard() {
                 <FolderTree className="h-12 w-12 text-primary mb-4" />
                 <h2 className="text-2xl font-bold mb-2">مدیریت دسته‌بندی‌ها</h2>
                 <p className="text-muted-foreground">افزودن و ویرایش دسته‌بندی‌ها</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/admin/product-credentials">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
+              <CardContent className="p-6">
+                <Key className="h-12 w-12 text-primary mb-4" />
+                <h2 className="text-2xl font-bold mb-2">اعتبارنامه‌های آماده</h2>
+                <p className="text-muted-foreground">مدیریت اعتبارنامه‌های تحویل فوری</p>
               </CardContent>
             </Card>
           </Link>

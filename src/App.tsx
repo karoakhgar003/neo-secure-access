@@ -32,6 +32,7 @@ import AdminOrders from "./pages/admin/AdminOrders";
 import NotFound from "./pages/NotFound";
 import BlogPost from "./pages/BlogPost";
 import AdminCategories from "./pages/admin/AdminCategories";
+import AdminProductCredentials from "./pages/admin/AdminProductCredentials";
 
 const queryClient = new QueryClient();
 
@@ -61,12 +62,13 @@ const App = () => (
             <Route path="/account/orders" element={<ProtectedRoute><AccountOrders /></ProtectedRoute>} />
             <Route path="/account/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/dashboard/credentials" element={<ProtectedRoute><DashboardCredentials /></ProtectedRoute>} />
+            <Route path="/dashboard/credentials/:orderItemId" element={<ProtectedRoute><DashboardCredentials /></ProtectedRoute>} />
             <Route path="/dashboard/totp" element={<ProtectedRoute><DashboardTOTP /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
             <Route path="/admin/products" element={<ProtectedRoute requireAdmin><AdminProducts /></ProtectedRoute>} />
             <Route path="/admin/categories" element={<ProtectedRoute requireAdmin><AdminCategories /></ProtectedRoute>} />
+            <Route path="/admin/product-credentials" element={<ProtectedRoute requireAdmin><AdminProductCredentials /></ProtectedRoute>} />
             <Route path="/admin/blog" element={<ProtectedRoute requireAdmin><AdminBlog /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute requireAdmin><AdminOrders /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

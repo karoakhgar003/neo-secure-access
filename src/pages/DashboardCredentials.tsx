@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,16 +8,61 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Copy, AlertTriangle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const DashboardCredentials = () => {
+  const { orderItemId } = useParams();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [credentials, setCredentials] = useState<any>(null);
   const { toast } = useToast();
 
-  const credentials = {
-    username: "neo_user_12345@gmail.com",
-    password: "SecureP@ssw0rd!2024",
+  useEffect(() => {
+    loadCredentials();
+  }, [orderItemId]);
+
+  const loadCredentials = async () => {
+    if (!orderItemId) return;
+
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('credentials, products(name)')
+      .eq('id', orderItemId)
+      .single();
+
+    if (error || !data?.credentials) {
+      toast({
+        title: 'خطا',
+        description: 'اطلاعات یافت نشد',
+        variant: 'destructive'
+      });
+      navigate('/dashboard');
+      return;
+    }
+
+    setCredentials(data.credentials);
+    setLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!credentials) {
+    return null;
+  }
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
