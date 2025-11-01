@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
-import { authenticator } from 'https://esm.sh/otplib@12.0.1';
+import { TOTP } from "https://deno.land/x/otpauth@v9.1.4/dist/otpauth.esm.js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,7 +108,8 @@ Deno.serve(async (req) => {
     }
 
     // Generate TOTP code
-    const code = authenticator.generate(totpSecret);
+    const totp = new TOTP({ secret: totpSecret });
+    const code = totp.generate();
     console.log(`[TOTP] Generated code for seat ${seat.id}`);
 
     // Update seat status
