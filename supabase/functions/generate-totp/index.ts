@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     // Get the seat for this order item and user
     const { data: seat, error: seatError } = await supabaseClient
       .from('account_seats')
-      .select('*, product_credentials(totp_secret)')
+      .select('*')
       .eq('order_item_id', orderItemId)
       .eq('user_id', user.id)
       .single();
@@ -49,6 +49,18 @@ Deno.serve(async (req) => {
     if (seatError || !seat) {
       console.error('[TOTP] Seat not found:', seatError);
       throw new Error('Seat not found');
+    }
+
+    // Get the credential with TOTP secret
+    const { data: credential, error: credentialError } = await supabaseClient
+      .from('product_credentials')
+      .select('totp_secret')
+      .eq('id', seat.credential_id)
+      .single();
+
+    if (credentialError || !credential) {
+      console.error('[TOTP] Credential not found:', credentialError);
+      throw new Error('Credential not found');
     }
 
     // Check seat status
@@ -101,7 +113,7 @@ Deno.serve(async (req) => {
     }
 
     // Get TOTP secret
-    const totpSecret = seat.product_credentials?.totp_secret;
+    const totpSecret = credential.totp_secret;
     if (!totpSecret) {
       console.error('[TOTP] No TOTP secret found for credential');
       throw new Error('TOTP not configured for this account');
