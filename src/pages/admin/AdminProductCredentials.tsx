@@ -28,6 +28,8 @@ interface Credential {
   additional_info: any;
   is_assigned: boolean;
   assigned_at: string | null;
+  max_seats: number;
+  totp_secret: string | null;
   products: { name: string };
 }
 
@@ -40,7 +42,9 @@ export default function AdminProductCredentials() {
     product_id: '',
     username: '',
     password: '',
-    additional_info: ''
+    additional_info: '',
+    max_seats: '1',
+    totp_secret: ''
   });
   const { toast } = useToast();
 
@@ -72,7 +76,9 @@ export default function AdminProductCredentials() {
       product_id: formData.product_id,
       username: formData.username,
       password: formData.password,
-      additional_info: formData.additional_info ? JSON.parse(formData.additional_info) : {}
+      additional_info: formData.additional_info ? JSON.parse(formData.additional_info) : {},
+      max_seats: parseInt(formData.max_seats) || 1,
+      totp_secret: formData.totp_secret || null
     });
 
     if (error) {
@@ -80,7 +86,7 @@ export default function AdminProductCredentials() {
     } else {
       toast({ title: 'موفق', description: 'اعتبارنامه اضافه شد' });
       setDialogOpen(false);
-      setFormData({ product_id: '', username: '', password: '', additional_info: '' });
+      setFormData({ product_id: '', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' });
       loadData();
     }
   };
@@ -131,6 +137,8 @@ export default function AdminProductCredentials() {
                     <TableHead>محصول</TableHead>
                     <TableHead>نام کاربری</TableHead>
                     <TableHead>رمز عبور</TableHead>
+                    <TableHead>تعداد صندلی</TableHead>
+                    <TableHead>TOTP</TableHead>
                     <TableHead>وضعیت</TableHead>
                     <TableHead>تاریخ اختصاص</TableHead>
                     <TableHead>عملیات</TableHead>
@@ -142,6 +150,14 @@ export default function AdminProductCredentials() {
                       <TableCell className="font-medium">{cred.products.name}</TableCell>
                       <TableCell>{cred.username}</TableCell>
                       <TableCell>••••••••</TableCell>
+                      <TableCell>{cred.max_seats || 1}</TableCell>
+                      <TableCell>
+                        {cred.totp_secret ? (
+                          <Badge variant="default">فعال</Badge>
+                        ) : (
+                          <Badge variant="secondary">غیرفعال</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {cred.is_assigned ? (
                           <Badge variant="secondary">اختصاص داده شده</Badge>
@@ -217,6 +233,28 @@ export default function AdminProductCredentials() {
                   onChange={(e) => setFormData({ ...formData, additional_info: e.target.value })}
                   placeholder='{"note": "توضیحات"}'
                 />
+              </div>
+              <div>
+                <Label>تعداد صندلی (کاربران مجاز)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.max_seats}
+                  onChange={(e) => setFormData({ ...formData, max_seats: e.target.value })}
+                  placeholder="1"
+                />
+              </div>
+              <div>
+                <Label>رمز TOTP (اختیاری)</Label>
+                <Input
+                  value={formData.totp_secret}
+                  onChange={(e) => setFormData({ ...formData, totp_secret: e.target.value })}
+                  placeholder="JBSWY3DPEHPK3PXP"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  رمز مخفی TOTP برای احراز هویت دو مرحله‌ای
+                </p>
               </div>
               <Button onClick={handleAdd} className="w-full">
                 افزودن

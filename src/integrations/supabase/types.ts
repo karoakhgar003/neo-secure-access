@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_seats: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          credential_id: string
+          id: string
+          last_code_issued_at: string | null
+          lock_reason: string | null
+          locked_at: string | null
+          order_item_id: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          attempt_count?: number | null
+          created_at?: string | null
+          credential_id: string
+          id?: string
+          last_code_issued_at?: string | null
+          lock_reason?: string | null
+          locked_at?: string | null
+          order_item_id: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          attempt_count?: number | null
+          created_at?: string | null
+          credential_id?: string
+          id?: string
+          last_code_issued_at?: string | null
+          lock_reason?: string | null
+          locked_at?: string | null
+          order_item_id?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_seats_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "product_credentials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_seats_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_posts: {
         Row: {
           category: string | null
@@ -210,8 +267,10 @@ export type Database = {
           created_at: string
           id: string
           is_assigned: boolean | null
+          max_seats: number | null
           password: string
           product_id: string
+          totp_secret: string | null
           username: string
         }
         Insert: {
@@ -221,8 +280,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_assigned?: boolean | null
+          max_seats?: number | null
           password: string
           product_id: string
+          totp_secret?: string | null
           username: string
         }
         Update: {
@@ -232,8 +293,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_assigned?: boolean | null
+          max_seats?: number | null
           password?: string
           product_id?: string
+          totp_secret?: string | null
           username?: string
         }
         Relationships: [
@@ -328,6 +391,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      totp_issuance_log: {
+        Row: {
+          attempt_number: number
+          id: string
+          ip_address: string | null
+          issued_at: string | null
+          outcome: string | null
+          seat_id: string
+          updated_at: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          attempt_number: number
+          id?: string
+          ip_address?: string | null
+          issued_at?: string | null
+          outcome?: string | null
+          seat_id: string
+          updated_at?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          attempt_number?: number
+          id?: string
+          ip_address?: string | null
+          issued_at?: string | null
+          outcome?: string | null
+          seat_id?: string
+          updated_at?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "totp_issuance_log_seat_id_fkey"
+            columns: ["seat_id"]
+            isOneToOne: false
+            referencedRelation: "account_seats"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

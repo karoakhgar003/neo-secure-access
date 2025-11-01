@@ -6,9 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, Copy, AlertTriangle, Shield } from "lucide-react";
+import { Eye, EyeOff, Copy, AlertTriangle, Shield, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import TotpModal from "@/components/totp/TotpModal";
 
 const DashboardCredentials = () => {
   const { orderItemId } = useParams();
@@ -17,6 +18,7 @@ const DashboardCredentials = () => {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [credentials, setCredentials] = useState<any>(null);
+  const [totpModalOpen, setTotpModalOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -182,14 +184,40 @@ const DashboardCredentials = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
-                      <span>در صورت بروز مشکل، با پشتیبانی تماس بگیرید</span>
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card>
+                   <span>در صورت بروز مشکل، با پشتیبانی تماس بگیرید</span>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          {credentials.requires_totp && (
+            <Card className="glass-card border-primary/20">
+              <CardContent className="p-6 text-center">
+                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Key className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">احراز هویت دو مرحله‌ای</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  این اکانت نیاز به کد TOTP برای ورود دارد. برای دریافت کد روی دکمه زیر کلیک کنید.
+                </p>
+                <Button onClick={() => setTotpModalOpen(true)} className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  دریافت کد TOTP
+                </Button>
+              </CardContent>
+            </Card>
+          )}
             </>
           )}
         </div>
+
+        {orderItemId && (
+          <TotpModal
+            open={totpModalOpen}
+            onOpenChange={setTotpModalOpen}
+            orderItemId={orderItemId}
+          />
+        )}
       </main>
       <Footer />
     </div>
