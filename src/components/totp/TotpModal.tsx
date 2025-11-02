@@ -22,6 +22,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   const [success, setSuccess] = useState(false);
   const { toast } = useToast();
 
+  // Countdown timer
   useEffect(() => {
     if (code && countdown > 0) {
       const timer = setInterval(() => {
@@ -30,6 +31,16 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       return () => clearInterval(timer);
     }
   }, [code, countdown]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Reset state when component unmounts (page reload, navigation)
+      setCode(null);
+      setCountdown(30);
+      setLoading(false);
+    };
+  }, []);
 
   const generateCode = async () => {
     setLoading(true);
@@ -132,6 +143,17 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   };
 
   const handleClose = () => {
+    // Prevent closing if code is active or loading
+    if ((code && !success && !locked) || loading) {
+      toast({
+        title: 'هشدار',
+        description: 'لطفا ابتدا وضعیت ورود خود را اعلام کنید یا صبر کنید تا کد منقضی شود.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Reset all state
     setCode(null);
     setCountdown(30);
     setAttempt(0);
@@ -143,7 +165,21 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent 
+        className="max-w-lg"
+        onInteractOutside={(e) => {
+          // Prevent closing on outside click if code is active
+          if ((code && !success && !locked) || loading) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing on ESC if code is active
+          if ((code && !success && !locked) || loading) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
