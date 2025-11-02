@@ -39,16 +39,95 @@ Deno.serve(async (req) => {
     console.log(`[TOTP] User ${user.id} requesting TOTP for order item ${orderItemId}`);
 
     // Get the seat for this order item and user
-    const { data: seat, error: seatError } = await supabaseClient
+    const { data: seatRow, error: seatError } = await supabaseClient
       .from('account_seats')
       .select('*')
       .eq('order_item_id', orderItemId)
       .eq('user_id', user.id)
       .single();
+    let seat = seatRow;
 
     if (seatError || !seat) {
-      console.error('[TOTP] Seat not found:', seatError);
-      throw new Error('Seat not found');
+      console.error('[TOTP] Seat not found for user/order item, attempting to provision seat:', seatError);
+
+      // Verify the order item belongs to the user
+      const { data: orderItem, error: orderItemError } = await supabaseClient
+        .from('order_items')
+        .select('id, product_id')
+        .eq('id', orderItemId)
+        .single();
+
+      if (orderItemError || !orderItem) {
+        console.error('[TOTP] Order item not found or not accessible:', orderItemError);
+        throw new Error('Order item not found or not accessible');
+      }
+
+      // Use service role for privileged operations
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      // Pick an available credential for this product
+      const { data: credentialCandidate, error: credSelectError } = await supabaseAdmin
+        .from('product_credentials')
+        .select('id, max_seats, is_assigned, created_at')
+        .eq('product_id', orderItem.product_id)
+        .order('is_assigned', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (credSelectError || !credentialCandidate) {
+        console.error('[TOTP] No available credentials for product:', credSelectError);
+        throw new Error('No credentials available for this product');
+      }
+
+      // Check current seat count for the credential
+      const { count: currentSeatsCount, error: countError } = await supabaseAdmin
+        .from('account_seats')
+        .select('*', { count: 'exact', head: true })
+        .eq('credential_id', credentialCandidate.id);
+
+      if (countError) {
+        console.error('[TOTP] Failed to count seats:', countError);
+        throw new Error('Failed to allocate seat');
+      }
+
+      if ((currentSeatsCount ?? 0) >= (credentialCandidate.max_seats ?? 1)) {
+        console.error('[TOTP] Credential has no available seats');
+        throw new Error('No available seats for this product');
+      }
+
+      // Create seat
+      const { data: createdSeat, error: insertSeatError } = await supabaseAdmin
+        .from('account_seats')
+        .insert({
+          credential_id: credentialCandidate.id,
+          order_item_id: orderItemId,
+          user_id: user.id
+        })
+        .select('*')
+        .single();
+
+      if (insertSeatError || !createdSeat) {
+        console.error('[TOTP] Failed to create seat:', insertSeatError);
+        throw new Error('Failed to create seat');
+      }
+
+      // If this was the last seat, mark credential as assigned
+      if (((currentSeatsCount ?? 0) + 1) >= (credentialCandidate.max_seats ?? 1)) {
+        const { error: markAssignedError } = await supabaseAdmin
+          .from('product_credentials')
+          .update({ is_assigned: true, assigned_at: new Date().toISOString() })
+          .eq('id', credentialCandidate.id);
+
+        if (markAssignedError) {
+          console.warn('[TOTP] Failed to mark credential as assigned:', markAssignedError);
+        }
+      }
+
+      seat = createdSeat;
     }
 
     // Get the credential with TOTP secret
