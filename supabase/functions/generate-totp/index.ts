@@ -130,8 +130,13 @@ Deno.serve(async (req) => {
       seat = createdSeat;
     }
 
-    // Get the credential with TOTP secret
-    const { data: credential, error: credentialError } = await supabaseClient
+    // Get the credential with TOTP secret using service role (bypass RLS)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: credential, error: credentialError } = await supabaseAdmin
       .from('product_credentials')
       .select('totp_secret')
       .eq('id', seat.credential_id)
