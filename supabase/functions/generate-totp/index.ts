@@ -179,19 +179,33 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Rate limiting: check if 30 seconds have passed since last code
+    // Rate limiting: if a code was issued in the last 30s, return the current valid code instead of error
     if (seat.last_code_issued_at) {
       const lastIssued = new Date(seat.last_code_issued_at).getTime();
       const now = Date.now();
       const timeDiff = (now - lastIssued) / 1000;
-      
+
       if (timeDiff < 30) {
+        const remaining = Math.ceil(30 - timeDiff);
+        const totpSecret = credential.totp_secret;
+        if (!totpSecret) {
+          console.error('[TOTP] No TOTP secret found for credential');
+          throw new Error('TOTP not configured for this account');
+        }
+        const totp = new TOTP({ secret: totpSecret });
+        const code = totp.generate();
+        console.log(`[TOTP] Reusing active code for seat ${seat.id}, ${remaining}s remaining`);
+
         return new Response(
-          JSON.stringify({ 
-            error: `Please wait ${Math.ceil(30 - timeDiff)} seconds before requesting another code.`,
-            waitTime: Math.ceil(30 - timeDiff)
+          JSON.stringify({
+            code,
+            attempt: seat.attempt_count,
+            isFinalAttempt: seat.attempt_count === 2,
+            status: seat.status,
+            expiresIn: remaining,
+            reused: true,
           }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
