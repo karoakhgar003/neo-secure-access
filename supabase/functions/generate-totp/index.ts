@@ -170,6 +170,35 @@ Deno.serve(async (req) => {
     }
 
     if (seat.attempt_count >= 2) {
+      // If a code was recently issued (final attempt), allow showing it again instead of error
+      if (seat.last_code_issued_at) {
+        const lastIssued = new Date(seat.last_code_issued_at).getTime();
+        const now = Date.now();
+        const timeDiff = (now - lastIssued) / 1000;
+        if (timeDiff < 30) {
+          const remaining = Math.ceil(30 - timeDiff);
+          const totpSecret = credential.totp_secret;
+          if (!totpSecret) {
+            console.error('[TOTP] No TOTP secret found for credential');
+            throw new Error('TOTP not configured for this account');
+          }
+          const totp = new TOTP({ secret: totpSecret });
+          const code = totp.generate();
+          console.log(`[TOTP] Reusing final attempt code for seat ${seat.id}, ${remaining}s remaining`);
+          return new Response(
+            JSON.stringify({
+              code,
+              attempt: seat.attempt_count,
+              isFinalAttempt: true,
+              status: seat.status,
+              expiresIn: remaining,
+              reused: true,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       return new Response(
         JSON.stringify({ 
           error: 'Maximum attempts reached. Please contact support.',
