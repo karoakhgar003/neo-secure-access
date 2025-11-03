@@ -21,6 +21,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   const [attempt, setAttempt] = useState(0);
   const [isFinalAttempt, setIsFinalAttempt] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
@@ -90,7 +91,18 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
         body: { orderItemId },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle edge function non-2xx without throwing
+        const server = (error.context ?? null) as any;
+        if (server?.locked) {
+          setLocked(true);
+          setLockReason(server?.lock_reason || null);
+          setErrorMessage(server?.error || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
+          return;
+        }
+        toast({ title: 'خطا', description: server?.error || 'خطایی رخ داد', variant: 'destructive' });
+        return;
+      }
 
       if (data.error) {
         if (data.locked) {
@@ -152,7 +164,17 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
         body: { orderItemId, success },
       });
 
-      if (error) throw error;
+      if (error) {
+        const server = (error.context ?? null) as any;
+        if (server?.locked) {
+          setLocked(true);
+          setLockReason(server?.lock_reason || null);
+          setErrorMessage(server?.message || 'به دلیل تلاش‌های ناموفق، صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
+          return;
+        }
+        toast({ title: 'خطا', description: server?.message || server?.error || 'عدم دسترسی', variant: 'destructive' });
+        return;
+      }
 
       if (success) {
         setSuccess(true);
@@ -164,6 +186,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       } else {
         if (data.locked) {
           setLocked(true);
+          setLockReason(data.lock_reason || null);
           setErrorMessage('متاسفانه ورود شما موفق نبود و صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
         } else {
           setCode(null);
@@ -219,6 +242,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
     setAttempt(0);
     setIsFinalAttempt(false);
     setLocked(false);
+    setLockReason(null);
     setSuccess(false);
     setErrorMessage(null);
     setLoading(false);
@@ -258,6 +282,9 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
               <XCircle className="h-4 w-4 text-destructive" />
               <AlertDescription className="space-y-2">
                 <p>{errorMessage || 'صندلی شما قفل شده است.'}</p>
+                {lockReason && (
+                  <p className="text-xs text-muted-foreground">علت: {lockReason}</p>
+                )}
                 <p className="text-sm">
                   برای حل این مشکل، لطفا با تیم پشتیبانی تماس بگیرید.
                 </p>
