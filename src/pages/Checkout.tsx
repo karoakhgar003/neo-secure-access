@@ -99,7 +99,7 @@ const Checkout = () => {
         description: 'سفارش شما با موفقیت ثبت شد'
       });
 
-      navigate('/thank-you');
+      navigate(`/thank-you?orderId=${order.id}`);
     } catch (error) {
       console.error('Checkout error:', error);
       toast({

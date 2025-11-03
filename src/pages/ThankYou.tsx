@@ -1,11 +1,65 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, Package, Send } from "lucide-react";
+import { CheckCircle2, Package, Send, KeyRound } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const ThankYou = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [orderData, setOrderData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const orderId = searchParams.get('orderId');
+    if (orderId && user) {
+      loadOrderData(orderId);
+    } else {
+      setLoading(false);
+    }
+  }, [searchParams, user]);
+
+  const loadOrderData = async (orderId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          status,
+          created_at,
+          order_items (
+            id,
+            product_id,
+            products (
+              name
+            )
+          )
+        `)
+        .eq('id', orderId)
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!error && data) {
+        setOrderData(data);
+      }
+    } catch (error) {
+      console.error('Error loading order:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewCredentials = () => {
+    if (orderData?.order_items?.[0]?.id) {
+      navigate(`/dashboard/credentials/${orderData.order_items[0].id}`);
+    }
+  };
   return (
     <div className="min-h-screen">
       <Header />
@@ -59,8 +113,19 @@ const ThankYou = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                {orderData?.status === 'completed' && orderData?.order_items?.length > 0 && (
+                  <Button 
+                    variant="hero" 
+                    size="lg" 
+                    onClick={handleViewCredentials}
+                    className="gap-2"
+                  >
+                    <KeyRound className="h-5 w-5" />
+                    مشاهده اطلاعات دسترسی
+                  </Button>
+                )}
                 <Link to="/account/orders">
-                  <Button variant="hero" size="lg">
+                  <Button variant={orderData?.status === 'completed' ? 'outline' : 'hero'} size="lg" className={orderData?.status === 'completed' ? 'glass-card border-primary/30' : ''}>
                     مشاهده سفارشات
                   </Button>
                 </Link>

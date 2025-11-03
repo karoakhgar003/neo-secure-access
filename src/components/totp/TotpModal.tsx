@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, AlertTriangle, CheckCircle, XCircle, Timer } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, XCircle, Timer, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,13 +17,15 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   const [loading, setLoading] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(30);
+  const [waitCountdown, setWaitCountdown] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [isFinalAttempt, setIsFinalAttempt] = useState(false);
   const [locked, setLocked] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Countdown timer
+  // Countdown timers
   useEffect(() => {
     if (code && countdown > 0) {
       const timer = setInterval(() => {
@@ -32,18 +35,56 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
     }
   }, [code, countdown]);
 
+  useEffect(() => {
+    if (waitCountdown > 0) {
+      const timer = setInterval(() => {
+        setWaitCountdown((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else if (waitCountdown === 0 && loading) {
+      // When countdown finishes, generate the code
+      actuallyGenerateCode();
+    }
+  }, [waitCountdown, loading]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       // Reset state when component unmounts (page reload, navigation)
       setCode(null);
       setCountdown(30);
+      setWaitCountdown(0);
       setLoading(false);
     };
   }, []);
 
+  const calculateWaitTime = () => {
+    // TOTP codes change every 30 seconds
+    const now = Math.floor(Date.now() / 1000);
+    const currentPosition = now % 30;
+    
+    // If we're past 15 seconds in current window, wait for next window
+    if (currentPosition > 15) {
+      return 30 - currentPosition;
+    }
+    return 0;
+  };
+
   const generateCode = async () => {
+    const waitTime = calculateWaitTime();
+    
+    if (waitTime > 0) {
+      setLoading(true);
+      setWaitCountdown(waitTime);
+      // actuallyGenerateCode will be called when countdown reaches 0
+    } else {
+      actuallyGenerateCode();
+    }
+  };
+
+  const actuallyGenerateCode = async () => {
     setLoading(true);
+    setWaitCountdown(0);
     try {
       const { data, error } = await supabase.functions.invoke('generate-totp', {
         body: { orderItemId },
@@ -54,22 +95,12 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       if (data.error) {
         if (data.locked) {
           setLocked(true);
-          toast({
-            title: 'صندلی قفل شده',
-            description: data.error,
-            variant: 'destructive',
-          });
+          setErrorMessage('شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
         } else if (data.success) {
           setSuccess(true);
           toast({
             title: 'ورود موفق',
             description: data.error,
-          });
-        } else if (data.waitTime) {
-          toast({
-            title: 'لطفا صبر کنید',
-            description: data.error,
-            variant: 'destructive',
           });
         } else {
           toast({
@@ -116,18 +147,15 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       } else {
         if (data.locked) {
           setLocked(true);
-          toast({
-            title: 'صندلی قفل شد',
-            description: data.message,
-            variant: 'destructive',
-          });
+          setErrorMessage('متاسفانه ورود شما موفق نبود و صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
         } else {
+          setCode(null);
+          setErrorMessage('ورود شما ناموفق بود. لطفا دوباره تلاش کنید و مطمئن شوید که کد را قبل از انقضا وارد می‌کنید.');
           toast({
-            title: 'تلاش ناموفق',
-            description: data.message,
+            title: 'ورود ناموفق',
+            description: 'کد وارد شده صحیح نبود یا منقضی شده است. لطفا دوباره تلاش کنید.',
             variant: 'destructive',
           });
-          setCode(null);
         }
       }
     } catch (error: any) {
@@ -143,8 +171,8 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   };
 
   const handleClose = () => {
-    // Prevent closing if code is active or loading
-    if ((code && !success && !locked) || loading) {
+    // Prevent closing if code is active or loading (but allow if waiting for next window)
+    if ((code && !success && !locked) || (loading && waitCountdown === 0)) {
       toast({
         title: 'هشدار',
         description: 'لطفا ابتدا وضعیت ورود خود را اعلام کنید یا صبر کنید تا کد منقضی شود.',
@@ -156,10 +184,13 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
     // Reset all state
     setCode(null);
     setCountdown(30);
+    setWaitCountdown(0);
     setAttempt(0);
     setIsFinalAttempt(false);
     setLocked(false);
     setSuccess(false);
+    setErrorMessage(null);
+    setLoading(false);
     onOpenChange(false);
   };
 
@@ -169,13 +200,13 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
         className="max-w-lg"
         onInteractOutside={(e) => {
           // Prevent closing on outside click if code is active
-          if ((code && !success && !locked) || loading) {
+          if ((code && !success && !locked) || (loading && waitCountdown === 0)) {
             e.preventDefault();
           }
         }}
         onEscapeKeyDown={(e) => {
           // Prevent closing on ESC if code is active
-          if ((code && !success && !locked) || loading) {
+          if ((code && !success && !locked) || (loading && waitCountdown === 0)) {
             e.preventDefault();
           }
         }}
@@ -190,17 +221,29 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
           </DialogDescription>
         </DialogHeader>
 
-        {locked ? (
+        {locked || errorMessage ? (
           <div className="space-y-4">
             <Alert className="border-destructive/30 bg-destructive/5">
               <XCircle className="h-4 w-4 text-destructive" />
-              <AlertDescription>
-                صندلی شما قفل شده است. لطفا با پشتیبانی تماس بگیرید.
+              <AlertDescription className="space-y-2">
+                <p>{errorMessage || 'صندلی شما قفل شده است.'}</p>
+                <p className="text-sm">
+                  برای حل این مشکل، لطفا با تیم پشتیبانی تماس بگیرید.
+                </p>
               </AlertDescription>
             </Alert>
-            <Button onClick={handleClose} className="w-full" variant="outline">
-              بستن
-            </Button>
+            
+            <div className="flex gap-2">
+              <Link to="/support" className="flex-1">
+                <Button variant="hero" className="w-full gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  تماس با پشتیبانی
+                </Button>
+              </Link>
+              <Button onClick={handleClose} variant="outline" className="flex-1">
+                بستن
+              </Button>
+            </div>
           </div>
         ) : success ? (
           <div className="space-y-4">
@@ -214,7 +257,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
               بستن
             </Button>
           </div>
-        ) : !code ? (
+        ) : !code && waitCountdown === 0 ? (
           <div className="space-y-4">
             <Alert className="border-primary/30 bg-primary/5">
               <AlertTriangle className="h-4 w-4 text-primary" />
@@ -225,7 +268,7 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
                     <p>در صورت عدم موفقیت، صندلی شما قفل خواهد شد و باید با پشتیبانی تماس بگیرید.</p>
                   </div>
                 ) : (
-                  'کد TOTP فقط ۳۰ ثانیه اعتبار دارد. لطفا قبل از دریافت کد، آماده ورود باشید.'
+                  'کد TOTP حداکثر ۳۰ ثانیه اعتبار دارد. برای بهترین نتیجه، کد در بهترین زمان ممکن صادر می‌شود.'
                 )}
               </AlertDescription>
             </Alert>
@@ -267,6 +310,47 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
               variant={isFinalAttempt ? 'destructive' : 'default'}
             >
               {loading ? 'در حال دریافت...' : isFinalAttempt ? 'دریافت کد نهایی' : 'دریافت کد TOTP'}
+            </Button>
+          </div>
+        ) : waitCountdown > 0 ? (
+          <div className="space-y-4">
+            <Alert className="border-primary/30 bg-primary/5">
+              <Timer className="h-4 w-4 text-primary" />
+              <AlertDescription>
+                <p className="font-bold mb-2">در حال آماده‌سازی کد شما...</p>
+                <p className="text-sm">
+                  برای اطمینان از دریافت کد با بیشترین زمان اعتبار، {waitCountdown} ثانیه دیگر منتظر بمانید.
+                </p>
+              </AlertDescription>
+            </Alert>
+
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary/10 border-4 border-primary/30">
+                <div className="text-4xl font-bold text-primary">{waitCountdown}</div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-4">
+                ثانیه تا صدور کد
+              </p>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4">
+              <h4 className="font-bold mb-2">در این مدت:</h4>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>✓ صفحه ورود را باز کنید</li>
+                <li>✓ نام کاربری و رمز عبور را وارد کنید</li>
+                <li>✓ آماده وارد کردن کد TOTP باشید</li>
+              </ul>
+            </div>
+
+            <Button
+              onClick={() => {
+                setWaitCountdown(0);
+                setLoading(false);
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              انصراف
             </Button>
           </div>
         ) : (

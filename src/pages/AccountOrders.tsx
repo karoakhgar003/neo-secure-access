@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Eye, ShieldCheck } from "lucide-react";
+import { Download, Eye, ShieldCheck, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +19,7 @@ interface Order {
   total_amount: number;
   admin_notes?: string | null;
   order_items: {
+    id: string;
     product_id: string;
     quantity: number;
     price: number;
@@ -31,6 +33,7 @@ interface Order {
 const AccountOrders = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -53,6 +56,7 @@ const AccountOrders = () => {
         total_amount,
         admin_notes,
         order_items (
+          id,
           product_id,
           quantity,
           price,
@@ -264,6 +268,21 @@ const AccountOrders = () => {
                     </h3>
                     <p className="text-sm whitespace-pre-wrap">{selectedOrder.admin_notes}</p>
                   </div>
+                )}
+
+                {selectedOrder.status === 'completed' && selectedOrder.order_items?.[0]?.id && (
+                  <Button 
+                    variant="hero" 
+                    size="lg" 
+                    className="w-full gap-2"
+                    onClick={() => {
+                      navigate(`/dashboard/credentials/${selectedOrder.order_items[0].id}`);
+                      setDialogOpen(false);
+                    }}
+                  >
+                    <KeyRound className="h-5 w-5" />
+                    مشاهده اطلاعات دسترسی
+                  </Button>
                 )}
               </div>
             )}
