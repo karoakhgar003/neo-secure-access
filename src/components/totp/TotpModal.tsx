@@ -189,11 +189,13 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
           setLockReason(data.lock_reason || null);
           setErrorMessage('متاسفانه ورود شما موفق نبود و صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
         } else {
+          // Reset to allow another attempt
           setCode(null);
-          setErrorMessage('ورود شما ناموفق بود. لطفا دوباره تلاش کنید و مطمئن شوید که کد را قبل از انقضا وارد می‌کنید.');
+          setCountdown(30);
+          setErrorMessage(null); // Don't show error, show generate button instead
           toast({
             title: 'ورود ناموفق',
-            description: 'کد وارد شده صحیح نبود یا منقضی شده است. لطفا دوباره تلاش کنید.',
+            description: 'لطفا دوباره تلاش کنید. این بار آخرین شانس شماست!',
             variant: 'destructive',
           });
         }
