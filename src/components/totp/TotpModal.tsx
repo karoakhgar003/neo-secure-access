@@ -98,16 +98,9 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
           setErrorMessage('شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
         } else if (data.success) {
           setSuccess(true);
-          toast({
-            title: 'ورود موفق',
-            description: data.error,
-          });
+          toast({ title: 'ورود موفق', description: data.error });
         } else {
-          toast({
-            title: 'خطا',
-            description: data.error,
-            variant: 'destructive',
-          });
+          toast({ title: 'خطا', description: data.error, variant: 'destructive' });
         }
         return;
       }
@@ -119,11 +112,19 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
     } catch (error: any) {
       console.error('Error generating TOTP:', error);
       const status = error?.status ?? error?.code;
-      const context = (error?.context ?? null) as any;
+      let server = (error?.context ?? null) as any;
 
-      if (error?.name === 'FunctionsHttpError' && status === 403) {
-        const serverMsg = context?.error as string | undefined;
-        if (context?.locked) {
+      // Fallback: try to parse JSON payload embedded in error.message
+      if (!server && typeof error?.message === 'string') {
+        const match = error.message.match(/\{.*\}$/);
+        if (match) {
+          try { server = JSON.parse(match[0]); } catch {}
+        }
+      }
+
+      if ((error?.name === 'FunctionsHttpError' || error?.name === 'FunctionsRelayError') && status === 403) {
+        const serverMsg = server?.error as string | undefined;
+        if (server?.locked) {
           setLocked(true);
           setErrorMessage(
             serverMsg || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.'
