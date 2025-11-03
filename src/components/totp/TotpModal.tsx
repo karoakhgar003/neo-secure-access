@@ -459,14 +459,20 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
                 </Button>
                 <Button
                   onClick={() => confirmLogin(false)}
-                  disabled={loading}
+                  disabled={loading || countdown > 0}
                   variant="destructive"
                   className="gap-2"
+                  title={countdown > 0 ? `لطفا ${countdown} ثانیه صبر کنید تا کد منقضی شود` : ''}
                 >
                   <XCircle className="h-4 w-4" />
                   خیر، نشد
                 </Button>
               </div>
+              {countdown > 0 && (
+                <p className="text-xs text-center text-muted-foreground">
+                  دکمه "خیر، نشد" بعد از انقضای کد فعال می‌شود
+                </p>
+              )}
             </div>
           </div>
         )}
