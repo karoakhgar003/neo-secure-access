@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
           locked: true,
           lock_reason: seat.lock_reason
         }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -199,13 +199,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      return new Response(
-        JSON.stringify({ 
-          error: 'Maximum attempts reached. Please contact support.',
-          locked: true
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    return new Response(
+      JSON.stringify({ 
+        error: 'Maximum attempts reached. Please contact support.',
+        locked: true
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
     }
 
     // Rate limiting: if a code was issued in the last 30s, return the current valid code instead of error
