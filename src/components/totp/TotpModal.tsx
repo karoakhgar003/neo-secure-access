@@ -118,6 +118,22 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       setIsFinalAttempt(data.isFinalAttempt);
     } catch (error: any) {
       console.error('Error generating TOTP:', error);
+      const status = error?.status ?? error?.code;
+      const context = (error?.context ?? null) as any;
+
+      if (error?.name === 'FunctionsHttpError' && status === 403) {
+        const serverMsg = context?.error as string | undefined;
+        if (context?.locked) {
+          setLocked(true);
+          setErrorMessage(
+            serverMsg || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.'
+          );
+          return;
+        }
+        toast({ title: 'خطا', description: serverMsg || 'دسترسی غیرمجاز', variant: 'destructive' });
+        return;
+      }
+
       toast({
         title: 'خطا',
         description: 'خطا در دریافت کد. لطفا دوباره تلاش کنید.',
@@ -160,6 +176,20 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
       }
     } catch (error: any) {
       console.error('Error confirming login:', error);
+      const status = error?.status ?? error?.code;
+      const context = (error?.context ?? null) as any;
+
+      if (error?.name === 'FunctionsHttpError' && status === 403) {
+        const serverMsg = context?.error || context?.message;
+        if (context?.locked) {
+          setLocked(true);
+          setErrorMessage(serverMsg || 'به دلیل تلاش‌های ناموفق، صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
+          return;
+        }
+        toast({ title: 'خطا', description: serverMsg || 'عدم دسترسی', variant: 'destructive' });
+        return;
+      }
+
       toast({
         title: 'خطا',
         description: 'خطا در ثبت وضعیت. لطفا دوباره تلاش کنید.',
