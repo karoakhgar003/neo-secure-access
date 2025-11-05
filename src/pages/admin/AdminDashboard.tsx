@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, Package, FileText, ShoppingCart, FolderTree, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -16,16 +17,19 @@ export default function AdminDashboard() {
     categories: 0,
     totalEarnings: 0
   });
+  const [revenueData, setRevenueData] = useState<{ date: string; revenue: number }[]>([]);
+  const [orderData, setOrderData] = useState<{ date: string; count: number }[]>([]);
 
   useEffect(() => {
     const loadStats = async () => {
-      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes, earningsRes] = await Promise.all([
+      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes, earningsRes, allOrdersRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('blog_posts').select('id', { count: 'exact', head: true }),
         supabase.from('orders').select('id', { count: 'exact', head: true }),
         supabase.from('categories').select('id', { count: 'exact', head: true }),
-        supabase.from('orders').select('total_amount').eq('status', 'completed')
+        supabase.from('orders').select('total_amount').eq('status', 'completed'),
+        supabase.from('orders').select('created_at, total_amount, status').order('created_at', { ascending: true })
       ]);
 
       const totalEarnings = (earningsRes.data || []).reduce((sum, order) => sum + Number(order.total_amount), 0);
@@ -38,6 +42,30 @@ export default function AdminDashboard() {
         categories: categoriesRes.count || 0,
         totalEarnings
       });
+
+      // Process revenue data by day
+      const revenueByDay: Record<string, number> = {};
+      const ordersByDay: Record<string, number> = {};
+      
+      (allOrdersRes.data || []).forEach(order => {
+        const date = new Date(order.created_at).toLocaleDateString('fa-IR');
+        if (order.status === 'completed') {
+          revenueByDay[date] = (revenueByDay[date] || 0) + Number(order.total_amount);
+        }
+        ordersByDay[date] = (ordersByDay[date] || 0) + 1;
+      });
+
+      setRevenueData(
+        Object.entries(revenueByDay)
+          .map(([date, revenue]) => ({ date, revenue }))
+          .slice(-30) // Last 30 days
+      );
+
+      setOrderData(
+        Object.entries(ordersByDay)
+          .map(([date, count]) => ({ date, count }))
+          .slice(-30)
+      );
     };
 
     loadStats();
@@ -117,6 +145,48 @@ export default function AdminDashboard() {
                   <p className="text-2xl font-bold">{stats.totalEarnings.toLocaleString('fa-IR')} تومان</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+          <Card className="glass-card border-primary/20">
+            <CardHeader>
+              <CardTitle>درآمد روزانه (30 روز گذشته)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value: number) => `${value.toLocaleString('fa-IR')} تومان`}
+                    labelFormatter={(label) => `تاریخ: ${label}`}
+                  />
+                  <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card border-primary/20">
+            <CardHeader>
+              <CardTitle>تعداد سفارشات روزانه (30 روز گذشته)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={orderData}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value: number) => `${value} سفارش`}
+                    labelFormatter={(label) => `تاریخ: ${label}`}
+                  />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>

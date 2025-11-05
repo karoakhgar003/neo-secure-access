@@ -157,13 +157,13 @@ export default function AdminOrders() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>شماره سفارش</TableHead>
-                    <TableHead>مشتری</TableHead>
-                    <TableHead>ایمیل</TableHead>
-                    <TableHead>مبلغ</TableHead>
-                    <TableHead>وضعیت</TableHead>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">شماره سفارش</TableHead>
+                    <TableHead className="text-right">مشتری</TableHead>
+                    <TableHead className="text-right">ایمیل</TableHead>
+                    <TableHead className="text-right">مبلغ</TableHead>
+                    <TableHead className="text-right">وضعیت</TableHead>
+                    <TableHead className="text-right">تاریخ</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

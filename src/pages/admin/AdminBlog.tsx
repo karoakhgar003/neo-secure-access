@@ -227,11 +227,11 @@ export default function AdminBlog() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>عنوان</TableHead>
-                    <TableHead>خلاصه</TableHead>
-                    <TableHead>وضعیت</TableHead>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">عنوان</TableHead>
+                    <TableHead className="text-right">خلاصه</TableHead>
+                    <TableHead className="text-right">وضعیت</TableHead>
+                    <TableHead className="text-right">تاریخ</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

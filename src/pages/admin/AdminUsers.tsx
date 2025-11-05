@@ -157,13 +157,13 @@ export default function AdminUsers() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>نام کامل</TableHead>
-                    <TableHead>ایمیل</TableHead>
-                    <TableHead>تلفن</TableHead>
-                    <TableHead>تلگرام</TableHead>
-                    <TableHead>نقش</TableHead>
-                    <TableHead>تاریخ ثبت‌نام</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">نام کامل</TableHead>
+                    <TableHead className="text-right">ایمیل</TableHead>
+                    <TableHead className="text-right">تلفن</TableHead>
+                    <TableHead className="text-right">تلگرام</TableHead>
+                    <TableHead className="text-right">نقش</TableHead>
+                    <TableHead className="text-right">تاریخ ثبت‌نام</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

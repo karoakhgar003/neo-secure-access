@@ -92,10 +92,10 @@ export default function AdminCategories() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>نام</TableHead>
-                    <TableHead>اسلاگ</TableHead>
-                    <TableHead>توضیحات</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">نام</TableHead>
+                    <TableHead className="text-right">اسلاگ</TableHead>
+                    <TableHead className="text-right">توضیحات</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

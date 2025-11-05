@@ -177,14 +177,14 @@ export default function AdminProductCredentials() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>محصول</TableHead>
-                    <TableHead>نام کاربری</TableHead>
-                    <TableHead>رمز عبور</TableHead>
-                    <TableHead>تعداد صندلی</TableHead>
-                    <TableHead>TOTP</TableHead>
-                    <TableHead>وضعیت</TableHead>
-                    <TableHead>تاریخ اختصاص</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">محصول</TableHead>
+                    <TableHead className="text-right">نام کاربری</TableHead>
+                    <TableHead className="text-right">رمز عبور</TableHead>
+                    <TableHead className="text-right">تعداد صندلی</TableHead>
+                    <TableHead className="text-right">TOTP</TableHead>
+                    <TableHead className="text-right">وضعیت</TableHead>
+                    <TableHead className="text-right">تاریخ اختصاص</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -326,10 +326,10 @@ export default function AdminProductCredentials() {
             <Table>
               <TableHeader dir="rtl">
                 <TableRow>
-                  <TableHead>نام کاربر</TableHead>
-                  <TableHead>ایمیل</TableHead>
-                  <TableHead>شماره سفارش</TableHead>
-                  <TableHead>وضعیت</TableHead>
+                  <TableHead className="text-right">نام کاربر</TableHead>
+                  <TableHead className="text-right">ایمیل</TableHead>
+                  <TableHead className="text-right">شماره سفارش</TableHead>
+                  <TableHead className="text-right">وضعیت</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
