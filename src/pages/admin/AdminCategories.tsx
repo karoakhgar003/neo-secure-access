@@ -90,7 +90,7 @@ export default function AdminCategories() {
               <div className="text-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div></div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>نام</TableHead>
                     <TableHead>اسلاگ</TableHead>

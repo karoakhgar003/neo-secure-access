@@ -155,7 +155,7 @@ export default function AdminOrders() {
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>شماره سفارش</TableHead>
                     <TableHead>مشتری</TableHead>

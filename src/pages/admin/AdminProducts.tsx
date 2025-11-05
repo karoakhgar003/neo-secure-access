@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Header from '@/components/layout/Footer';
+import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -256,7 +256,7 @@ export default function AdminProducts() {
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>نام محصول</TableHead>
                     <TableHead>دسته‌بندی</TableHead>

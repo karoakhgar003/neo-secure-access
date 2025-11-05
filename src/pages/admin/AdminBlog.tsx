@@ -93,6 +93,27 @@ export default function AdminBlog() {
     }
   };
 
+  const handleEdit = async (post: BlogPost) => {
+    const { data } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('id', post.id)
+      .single();
+    
+    if (data) {
+      setEditingPost(post);
+      setFormData({
+        title: data.title,
+        slug: data.slug,
+        summary: data.summary || '',
+        content: data.content,
+        image_url: data.image_url || '',
+        published: data.published
+      });
+      setDialogOpen(true);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('آیا مطمئن هستید؟')) return;
 
@@ -204,7 +225,7 @@ export default function AdminBlog() {
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>عنوان</TableHead>
                     <TableHead>خلاصه</TableHead>
@@ -224,6 +245,13 @@ export default function AdminBlog() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(post)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

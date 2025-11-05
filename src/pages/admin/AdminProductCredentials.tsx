@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Product {
@@ -33,11 +33,23 @@ interface Credential {
   products: { name: string };
 }
 
+interface Seat {
+  id: string;
+  user_id: string;
+  order_item_id: string;
+  status: string;
+  profiles: { full_name: string | null; email: string | null };
+  order_items: { order_id: string; orders: { order_number: string } };
+}
+
 export default function AdminProductCredentials() {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
+  const [seatsDialogOpen, setSeatsDialogOpen] = useState(false);
+  const [selectedCredentialSeats, setSelectedCredentialSeats] = useState<Seat[]>([]);
   const [formData, setFormData] = useState({
     product_id: '',
     username: '',
@@ -66,29 +78,60 @@ export default function AdminProductCredentials() {
     setLoading(false);
   };
 
-  const handleAdd = async () => {
+  const handleSubmit = async () => {
     if (!formData.product_id || !formData.username || !formData.password) {
       toast({ title: 'خطا', description: 'لطفا همه فیلدها را پر کنید', variant: 'destructive' });
       return;
     }
 
-    const { error } = await supabase.from('product_credentials').insert({
+    const payload = {
       product_id: formData.product_id,
       username: formData.username,
       password: formData.password,
       additional_info: formData.additional_info ? JSON.parse(formData.additional_info) : {},
       max_seats: parseInt(formData.max_seats) || 1,
       totp_secret: formData.totp_secret || null
-    });
+    };
+
+    let error;
+    if (editingCredential) {
+      ({ error } = await supabase.from('product_credentials').update(payload).eq('id', editingCredential.id));
+    } else {
+      ({ error } = await supabase.from('product_credentials').insert(payload));
+    }
 
     if (error) {
-      toast({ title: 'خطا', description: 'افزودن انجام نشد', variant: 'destructive' });
+      toast({ title: 'خطا', description: 'عملیات انجام نشد', variant: 'destructive' });
     } else {
-      toast({ title: 'موفق', description: 'اعتبارنامه اضافه شد' });
+      toast({ title: 'موفق', description: editingCredential ? 'به‌روزرسانی شد' : 'اعتبارنامه اضافه شد' });
       setDialogOpen(false);
+      setEditingCredential(null);
       setFormData({ product_id: '', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' });
       loadData();
     }
+  };
+
+  const handleEdit = (cred: Credential) => {
+    setEditingCredential(cred);
+    setFormData({
+      product_id: cred.product_id,
+      username: cred.username,
+      password: cred.password,
+      additional_info: JSON.stringify(cred.additional_info || {}, null, 2),
+      max_seats: (cred.max_seats || 1).toString(),
+      totp_secret: cred.totp_secret || ''
+    });
+    setDialogOpen(true);
+  };
+
+  const handleViewSeats = async (credentialId: string) => {
+    const { data } = await supabase
+      .from('account_seats')
+      .select('id, user_id, order_item_id, status, profiles(full_name, email), order_items(order_id, orders(order_number))')
+      .eq('credential_id', credentialId);
+    
+    setSelectedCredentialSeats(data as any || []);
+    setSeatsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -111,7 +154,7 @@ export default function AdminProductCredentials() {
             مدیریت <span className="gradient-primary bg-clip-text text-transparent">اعتبارنامه‌ها</span>
           </h1>
           <div className="flex gap-3">
-            <Button onClick={() => setDialogOpen(true)} className="gap-2">
+            <Button onClick={() => { setEditingCredential(null); setDialogOpen(true); }} className="gap-2">
               <Plus className="h-4 w-4" />
               افزودن اعتبارنامه
             </Button>
@@ -132,7 +175,7 @@ export default function AdminProductCredentials() {
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>محصول</TableHead>
                     <TableHead>نام کاربری</TableHead>
@@ -171,15 +214,27 @@ export default function AdminProductCredentials() {
                           : '-'}
                       </TableCell>
                       <TableCell>
-                        {!cred.is_assigned && (
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleViewSeats(cred.id)}>
+                            مشاهده صندلی‌ها
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(cred.id)}
+                            onClick={() => handleEdit(cred)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        )}
+                          {!cred.is_assigned && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(cred.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -189,10 +244,10 @@ export default function AdminProductCredentials() {
           </CardContent>
         </Card>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setEditingCredential(null); setFormData({ product_id: '', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' }); }}}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>افزودن اعتبارنامه جدید</DialogTitle>
+              <DialogTitle>{editingCredential ? 'ویرایش اعتبارنامه' : 'افزودن اعتبارنامه جدید'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -256,10 +311,50 @@ export default function AdminProductCredentials() {
                   رمز مخفی TOTP برای احراز هویت دو مرحله‌ای
                 </p>
               </div>
-              <Button onClick={handleAdd} className="w-full">
-                افزودن
+              <Button onClick={handleSubmit} className="w-full">
+                {editingCredential ? 'به‌روزرسانی' : 'افزودن'}
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={seatsDialogOpen} onOpenChange={setSeatsDialogOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>صندلی‌های اختصاص داده شده</DialogTitle>
+            </DialogHeader>
+            <Table>
+              <TableHeader dir="rtl">
+                <TableRow>
+                  <TableHead>نام کاربر</TableHead>
+                  <TableHead>ایمیل</TableHead>
+                  <TableHead>شماره سفارش</TableHead>
+                  <TableHead>وضعیت</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedCredentialSeats.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      هنوز صندلی‌ای اختصاص داده نشده
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  selectedCredentialSeats.map((seat) => (
+                    <TableRow key={seat.id}>
+                      <TableCell>{seat.profiles?.full_name || 'نامشخص'}</TableCell>
+                      <TableCell>{seat.profiles?.email || '-'}</TableCell>
+                      <TableCell>{seat.order_items?.orders?.order_number || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={seat.status === 'active' ? 'default' : 'secondary'}>
+                          {seat.status === 'active' ? 'فعال' : seat.status === 'locked' ? 'قفل شده' : 'نامشخص'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </DialogContent>
         </Dialog>
       </main>

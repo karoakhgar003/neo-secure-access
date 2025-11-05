@@ -155,7 +155,7 @@ export default function AdminUsers() {
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead>نام کامل</TableHead>
                     <TableHead>ایمیل</TableHead>

@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -74,11 +75,11 @@ const AccountSettings = () => {
     <div className="min-h-screen">
       <Header />
       <main className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-8">
+        <h1 className="text-4xl font-bold mb-8 text-center">
           تنظیمات <span className="gradient-primary bg-clip-text text-transparent">حساب</span>
         </h1>
 
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-2xl mx-auto space-y-6">
           {/* Profile Information */}
           <Card className="glass-card border-primary/20">
             <CardContent className="p-6">
@@ -139,66 +140,16 @@ const AccountSettings = () => {
             </CardContent>
           </Card>
 
-          {/* Telegram Connection */}
-          <Card className="glass-card border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Send className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">اتصال به تلگرام</h2>
-                  <p className="text-muted-foreground text-sm">برای دریافت کدهای TOTP</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="glass-card border border-primary/20 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    برای استفاده از سرویس‌های خاص، باید حساب تلگرام خود را متصل کنید
-                  </p>
-                  <Button variant="hero" className="w-full gap-2">
-                    <Send className="h-4 w-4" />
-                    اتصال به ربات تلگرام
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Password Change */}
           <Card className="glass-card border-primary/20">
             <CardContent className="p-6">
-              <h2 className="text-2xl font-bold mb-6">تغییر رمز عبور</h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="current-password">رمز عبور فعلی</Label>
-                  <Input
-                    id="current-password"
-                    type="password"
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="new-password">رمز عبور جدید</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="confirm-password">تکرار رمز عبور جدید</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    className="mt-2"
-                  />
-                </div>
-                <Button variant="hero">
+              <h2 className="text-2xl font-bold mb-4">تغییر رمز عبور</h2>
+              <p className="text-muted-foreground mb-4">برای تغییر رمز عبور خود، به صفحه تغییر رمز عبور بروید</p>
+              <Link to="/account/change-password">
+                <Button variant="hero" className="w-full">
                   تغییر رمز عبور
                 </Button>
-              </div>
+              </Link>
             </CardContent>
           </Card>
 

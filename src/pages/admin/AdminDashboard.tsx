@@ -13,25 +13,30 @@ export default function AdminDashboard() {
     products: 0,
     blogPosts: 0,
     orders: 0,
-    categories: 0
+    categories: 0,
+    totalEarnings: 0
   });
 
   useEffect(() => {
     const loadStats = async () => {
-      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes] = await Promise.all([
+      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes, earningsRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('blog_posts').select('id', { count: 'exact', head: true }),
         supabase.from('orders').select('id', { count: 'exact', head: true }),
-        supabase.from('categories').select('id', { count: 'exact', head: true })
+        supabase.from('categories').select('id', { count: 'exact', head: true }),
+        supabase.from('orders').select('total_amount').eq('status', 'completed')
       ]);
+
+      const totalEarnings = (earningsRes.data || []).reduce((sum, order) => sum + Number(order.total_amount), 0);
 
       setStats({
         users: usersRes.count || 0,
         products: productsRes.count || 0,
         blogPosts: postsRes.count || 0,
         orders: ordersRes.count || 0,
-        categories: categoriesRes.count || 0
+        categories: categoriesRes.count || 0,
+        totalEarnings
       });
     };
 
@@ -46,50 +51,70 @@ export default function AdminDashboard() {
           پنل <span className="gradient-primary bg-clip-text text-transparent">مدیریت</span>
         </h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <Card className="glass-card border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">کاربران</p>
-                  <p className="text-3xl font-bold">{stats.users}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+          <Link to="/admin/users">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Users className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">کاربران</p>
+                    <p className="text-3xl font-bold">{stats.users}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="glass-card border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Package className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">محصولات</p>
-                  <p className="text-3xl font-bold">{stats.products}</p>
+          <Link to="/admin/products">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">محصولات</p>
+                    <p className="text-3xl font-bold">{stats.products}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="glass-card border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">مقالات</p>
-                  <p className="text-3xl font-bold">{stats.blogPosts}</p>
+          <Link to="/admin/blog">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">مقالات</p>
+                    <p className="text-3xl font-bold">{stats.blogPosts}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/admin/orders">
+            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <ShoppingCart className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">سفارشات</p>
+                    <p className="text-3xl font-bold">{stats.orders}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
           <Card className="glass-card border-primary/20">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-2">
                 <ShoppingCart className="h-8 w-8 text-primary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">سفارشات</p>
-                  <p className="text-3xl font-bold">{stats.orders}</p>
+                  <p className="text-sm text-muted-foreground">درآمد کل</p>
+                  <p className="text-2xl font-bold">{stats.totalEarnings.toLocaleString('fa-IR')} تومان</p>
                 </div>
               </div>
             </CardContent>

@@ -21,6 +21,7 @@ import Auth from "./pages/Auth";
 import Account from "./pages/Account";
 import AccountOrders from "./pages/AccountOrders";
 import AccountSettings from "./pages/AccountSettings";
+import ChangePassword from "./pages/ChangePassword";
 import Dashboard from "./pages/Dashboard";
 import DashboardCredentials from "./pages/DashboardCredentials";
 import DashboardTOTP from "./pages/DashboardTOTP";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
             <Route path="/account/orders" element={<ProtectedRoute><AccountOrders /></ProtectedRoute>} />
             <Route path="/account/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
+            <Route path="/account/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard/credentials/:orderItemId" element={<ProtectedRoute><DashboardCredentials /></ProtectedRoute>} />
             <Route path="/dashboard/totp" element={<ProtectedRoute><DashboardTOTP /></ProtectedRoute>} />
