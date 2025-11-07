@@ -258,11 +258,11 @@ export default function AdminProducts() {
               <Table>
                 <TableHeader dir="rtl">
                   <TableRow>
-                    <TableHead>نام محصول</TableHead>
-                    <TableHead>دسته‌بندی</TableHead>
-                    <TableHead>قیمت</TableHead>
-                    <TableHead>وضعیت</TableHead>
-                    <TableHead>عملیات</TableHead>
+                    <TableHead className="text-right">نام محصول</TableHead>
+                    <TableHead className="text-right">دسته‌بندی</TableHead>
+                    <TableHead className="text-right">قیمت</TableHead>
+                    <TableHead className="text-right">وضعیت</TableHead>
+                    <TableHead className="text-right">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
