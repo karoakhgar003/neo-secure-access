@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -125,12 +125,18 @@ export default function AdminProductCredentials() {
   };
 
   const handleViewSeats = async (credentialId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('account_seats')
       .select('id, user_id, order_item_id, status, profiles(full_name, email), order_items(order_id, orders(order_number))')
-      .eq('credential_id', credentialId);
+      .eq('credential_id', credentialId)
+      .order('created_at', { ascending: false });
     
-    setSelectedCredentialSeats(data as any || []);
+    if (error) {
+      toast({ title: 'خطا در بارگذاری صندلی‌ها', description: error.message, variant: 'destructive' });
+      setSelectedCredentialSeats([]);
+    } else {
+      setSelectedCredentialSeats((data as any) || []);
+    }
     setSeatsDialogOpen(true);
   };
 
@@ -248,6 +254,7 @@ export default function AdminProductCredentials() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingCredential ? 'ویرایش اعتبارنامه' : 'افزودن اعتبارنامه جدید'}</DialogTitle>
+              <DialogDescription>لطفا اطلاعات لازم برای اعتبارنامه محصول را وارد کنید.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -322,6 +329,7 @@ export default function AdminProductCredentials() {
           <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>صندلی‌های اختصاص داده شده</DialogTitle>
+              <DialogDescription>فهرست صندلی‌های اختصاص داده‌شده به این اعتبارنامه.</DialogDescription>
             </DialogHeader>
             <Table>
               <TableHeader dir="rtl">
