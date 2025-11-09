@@ -6,12 +6,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Eye, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Order {
@@ -24,11 +24,20 @@ interface Order {
   admin_notes?: string | null;
   profiles: { full_name: string | null };
   order_items?: {
+    id: string;
     product_id: string;
     quantity: number;
     price: number;
+    credentials: any;
     products: { name: string; image_url: string };
   }[];
+}
+
+interface Credential {
+  id: string;
+  username: string;
+  max_seats: number;
+  current_seats: number;
 }
 
 export default function AdminOrders() {
@@ -37,6 +46,10 @@ export default function AdminOrders() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedOrderItem, setSelectedOrderItem] = useState<string | null>(null);
+  const [availableCredentials, setAvailableCredentials] = useState<Credential[]>([]);
+  const [selectedCredential, setSelectedCredential] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -77,12 +90,172 @@ export default function AdminOrders() {
   const handleViewDetails = async (order: Order) => {
     const { data } = await supabase
       .from('order_items')
-      .select('product_id, quantity, price, products(name, image_url)')
+      .select('id, product_id, quantity, price, credentials, products(name, image_url)')
       .eq('order_id', order.id);
     
     setSelectedOrder({ ...order, order_items: data as any });
     setAdminNotes(order.admin_notes || '');
     setDialogOpen(true);
+  };
+
+  const handleOpenAssignDialog = async (orderItemId: string, productId: string) => {
+    // Get available credentials for this product
+    const { data: credentials } = await supabase
+      .from('product_credentials')
+      .select('id, username, max_seats')
+      .eq('product_id', productId);
+
+    if (!credentials || credentials.length === 0) {
+      toast({ title: 'خطا', description: 'اعتبارنامه‌ای برای این محصول موجود نیست', variant: 'destructive' });
+      return;
+    }
+
+    // Get seat counts for each credential
+    const credentialsWithSeats = await Promise.all(
+      credentials.map(async (cred) => {
+        const { count } = await supabase
+          .from('account_seats')
+          .select('*', { count: 'exact', head: true })
+          .eq('credential_id', cred.id);
+        
+        return {
+          ...cred,
+          current_seats: count || 0
+        };
+      })
+    );
+
+    // Filter to only show credentials with available seats
+    const available = credentialsWithSeats.filter(c => c.current_seats < c.max_seats);
+
+    if (available.length === 0) {
+      toast({ title: 'خطا', description: 'همه اعتبارنامه‌ها پر هستند', variant: 'destructive' });
+      return;
+    }
+
+    setAvailableCredentials(available);
+    setSelectedOrderItem(orderItemId);
+    setSelectedCredential('');
+    setAssignDialogOpen(true);
+  };
+
+  const handleAssignCredential = async () => {
+    if (!selectedCredential || !selectedOrderItem) return;
+
+    // Get credential details
+    const { data: credential } = await supabase
+      .from('product_credentials')
+      .select('username, password, additional_info, totp_secret')
+      .eq('id', selectedCredential)
+      .single();
+
+    if (!credential) {
+      toast({ title: 'خطا', description: 'اعتبارنامه یافت نشد', variant: 'destructive' });
+      return;
+    }
+
+    // Get order item and order details
+    const { data: orderItem } = await supabase
+      .from('order_items')
+      .select('order_id, product_id')
+      .eq('id', selectedOrderItem)
+      .single();
+
+    if (!orderItem) {
+      toast({ title: 'خطا', description: 'آیتم سفارش یافت نشد', variant: 'destructive' });
+      return;
+    }
+
+    const { data: order } = await supabase
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderItem.order_id)
+      .single();
+
+    if (!order) {
+      toast({ title: 'خطا', description: 'سفارش یافت نشد', variant: 'destructive' });
+      return;
+    }
+
+    // Create seat
+    const { error: seatError } = await supabase
+      .from('account_seats')
+      .insert({
+        credential_id: selectedCredential,
+        order_item_id: selectedOrderItem,
+        user_id: order.user_id,
+        status: credential.totp_secret ? 'unclaimed' : 'success'
+      });
+
+    if (seatError) {
+      toast({ title: 'خطا', description: 'ایجاد صندلی انجام نشد', variant: 'destructive' });
+      return;
+    }
+
+    // Update order item with credentials
+    const { error: updateError } = await supabase
+      .from('order_items')
+      .update({
+        credentials: {
+          username: credential.username,
+          password: credential.password,
+          additional_info: credential.additional_info,
+          requires_totp: credential.totp_secret !== null
+        }
+      })
+      .eq('id', selectedOrderItem);
+
+    if (updateError) {
+      toast({ title: 'خطا', description: 'به‌روزرسانی اعتبارنامه انجام نشد', variant: 'destructive' });
+      return;
+    }
+
+    // Check if all seats are filled and mark credential as assigned
+    const { count } = await supabase
+      .from('account_seats')
+      .select('*', { count: 'exact', head: true })
+      .eq('credential_id', selectedCredential);
+
+    const cred = availableCredentials.find(c => c.id === selectedCredential);
+    if (cred && count && count >= cred.max_seats) {
+      await supabase
+        .from('product_credentials')
+        .update({ is_assigned: true, assigned_at: new Date().toISOString() })
+        .eq('id', selectedCredential);
+    }
+
+    // Update order status to completed
+    await supabase
+      .from('orders')
+      .update({ status: 'completed' })
+      .eq('id', orderItem.order_id);
+
+    // Log success for non-TOTP credentials
+    if (!credential.totp_secret) {
+      const { data: seat } = await supabase
+        .from('account_seats')
+        .select('id')
+        .eq('order_item_id', selectedOrderItem)
+        .single();
+      
+      if (seat) {
+        await supabase
+          .from('totp_issuance_log')
+          .insert({
+            seat_id: seat.id,
+            user_id: order.user_id,
+            attempt_number: 1,
+            outcome: 'success'
+          });
+      }
+    }
+
+    toast({ title: 'موفق', description: 'اعتبارنامه با موفقیت اختصاص داده شد' });
+    setAssignDialogOpen(false);
+    loadOrders();
+    if (selectedOrder) {
+      handleViewDetails(selectedOrder);
+    }
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
@@ -194,6 +367,7 @@ export default function AdminOrders() {
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>جزئیات سفارش {selectedOrder?.order_number}</DialogTitle>
+              <DialogDescription>مشاهده و مدیریت جزئیات سفارش</DialogDescription>
             </DialogHeader>
             {selectedOrder && (
               <div className="space-y-6">
@@ -258,6 +432,19 @@ export default function AdminOrders() {
                         <div className="flex-1">
                           <p className="font-medium">{item.products.name}</p>
                           <p className="text-sm text-muted-foreground">تعداد: {item.quantity}</p>
+                          {item.credentials ? (
+                            <Badge variant="default" className="mt-1">اعتبارنامه اختصاص داده شده</Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2 gap-2"
+                              onClick={() => handleOpenAssignDialog(item.id, item.product_id)}
+                            >
+                              <Link2 className="h-4 w-4" />
+                              اختصاص اعتبارنامه
+                            </Button>
+                          )}
                         </div>
                         <p className="font-bold text-primary">
                           {Number(item.price).toLocaleString('fa-IR')} تومان
@@ -268,6 +455,35 @@ export default function AdminOrders() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>اختصاص اعتبارنامه به سفارش</DialogTitle>
+              <DialogDescription>یک اعتبارنامه در دسترس را انتخاب کنید</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>اعتبارنامه</Label>
+                <Select value={selectedCredential} onValueChange={setSelectedCredential}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="انتخاب اعتبارنامه" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableCredentials.map((cred) => (
+                      <SelectItem key={cred.id} value={cred.id}>
+                        {cred.username} ({cred.current_seats}/{cred.max_seats} پر شده)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleAssignCredential} className="w-full" disabled={!selectedCredential}>
+                اختصاص اعتبارنامه
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </main>

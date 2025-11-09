@@ -38,8 +38,11 @@ interface Seat {
   user_id: string;
   order_item_id: string;
   status: string;
+  credential_id: string;
   profiles: { full_name: string | null; email: string | null };
   order_items: { order_id: string; orders: { order_number: string } };
+  product_credentials: { totp_secret: string | null };
+  totp_logs: { outcome: string; attempt_number: number }[];
 }
 
 export default function AdminProductCredentials() {
@@ -127,7 +130,17 @@ export default function AdminProductCredentials() {
   const handleViewSeats = async (credentialId: string) => {
     const { data, error } = await supabase
       .from('account_seats')
-      .select('id, user_id, order_item_id, status, profiles(full_name, email), order_items(order_id, orders(order_number))')
+      .select(`
+        id, 
+        user_id, 
+        order_item_id, 
+        status, 
+        credential_id,
+        profiles(full_name, email), 
+        order_items(order_id, orders(order_number)),
+        product_credentials(totp_secret),
+        totp_issuance_log(outcome, attempt_number)
+      `)
       .eq('credential_id', credentialId)
       .order('created_at', { ascending: false });
     
@@ -138,6 +151,30 @@ export default function AdminProductCredentials() {
       setSelectedCredentialSeats((data as any) || []);
     }
     setSeatsDialogOpen(true);
+  };
+
+  const getTotpStatusBadge = (seat: Seat) => {
+    const hasTotp = seat.product_credentials?.totp_secret;
+    const logs = seat.totp_logs || [];
+    
+    if (!hasTotp) {
+      return <Badge variant="default">موفق (بدون TOTP)</Badge>;
+    }
+    
+    const successLog = logs.find(log => log.outcome === 'success');
+    if (successLog) {
+      return <Badge variant="default">موفق</Badge>;
+    }
+    
+    const failedLogs = logs.filter(log => log.outcome === 'failure');
+    if (failedLogs.length === 2 || seat.status === 'locked') {
+      return <Badge variant="destructive">ناموفق 2/2</Badge>;
+    }
+    if (failedLogs.length === 1) {
+      return <Badge variant="secondary">ناموفق 1/2</Badge>;
+    }
+    
+    return <Badge variant="outline">تایید نشده</Badge>;
   };
 
   const handleDelete = async (id: string) => {
@@ -337,7 +374,7 @@ export default function AdminProductCredentials() {
                   <TableHead className="text-right">نام کاربر</TableHead>
                   <TableHead className="text-right">ایمیل</TableHead>
                   <TableHead className="text-right">شماره سفارش</TableHead>
-                  <TableHead className="text-right">وضعیت</TableHead>
+                  <TableHead className="text-right">وضعیت TOTP</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -353,11 +390,7 @@ export default function AdminProductCredentials() {
                       <TableCell>{seat.profiles?.full_name || 'نامشخص'}</TableCell>
                       <TableCell>{seat.profiles?.email || '-'}</TableCell>
                       <TableCell>{seat.order_items?.orders?.order_number || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={seat.status === 'active' ? 'default' : 'secondary'}>
-                          {seat.status === 'active' ? 'فعال' : seat.status === 'locked' ? 'قفل شده' : 'نامشخص'}
-                        </Badge>
-                      </TableCell>
+                      <TableCell>{getTotpStatusBadge(seat)}</TableCell>
                     </TableRow>
                   ))
                 )}
