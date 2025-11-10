@@ -23,6 +23,7 @@ interface Order {
     product_id: string;
     quantity: number;
     price: number;
+    credentials?: any;
     products: {
       name: string;
       image_url: string;
@@ -60,6 +61,7 @@ const AccountOrders = () => {
           product_id,
           quantity,
           price,
+          credentials,
           products (
             name,
             image_url

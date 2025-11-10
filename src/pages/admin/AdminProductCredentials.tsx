@@ -128,7 +128,8 @@ export default function AdminProductCredentials() {
   };
 
   const handleViewSeats = async (credentialId: string) => {
-    const { data, error } = await supabase
+    // First get the seats
+    const { data: seatsData, error: seatsError } = await supabase
       .from('account_seats')
       .select(`
         id, 
@@ -138,18 +139,35 @@ export default function AdminProductCredentials() {
         credential_id,
         profiles(full_name, email), 
         order_items(order_id, orders(order_number)),
-        product_credentials(totp_secret),
-        totp_issuance_log(outcome, attempt_number)
+        product_credentials(totp_secret)
       `)
       .eq('credential_id', credentialId)
       .order('created_at', { ascending: false });
     
-    if (error) {
-      toast({ title: 'خطا در بارگذاری صندلی‌ها', description: error.message, variant: 'destructive' });
+    if (seatsError) {
+      toast({ title: 'خطا در بارگذاری صندلی‌ها', description: seatsError.message, variant: 'destructive' });
       setSelectedCredentialSeats([]);
-    } else {
-      setSelectedCredentialSeats((data as any) || []);
+      setSeatsDialogOpen(true);
+      return;
     }
+
+    // Get TOTP logs for each seat
+    const seatsWithLogs = await Promise.all(
+      (seatsData || []).map(async (seat: any) => {
+        const { data: logs } = await supabase
+          .from('totp_issuance_log')
+          .select('outcome, attempt_number')
+          .eq('seat_id', seat.id)
+          .order('attempt_number', { ascending: true });
+        
+        return {
+          ...seat,
+          totp_logs: logs || []
+        };
+      })
+    );
+    
+    setSelectedCredentialSeats(seatsWithLogs as any);
     setSeatsDialogOpen(true);
   };
 
