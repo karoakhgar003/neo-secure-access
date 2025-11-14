@@ -18,6 +18,7 @@ const DashboardCredentials = () => {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [credentials, setCredentials] = useState<any>(null);
+  const [orderData, setOrderData] = useState<any>(null);
   const [totpModalOpen, setTotpModalOpen] = useState(false);
   const { toast } = useToast();
 
@@ -28,13 +29,15 @@ const DashboardCredentials = () => {
   const loadCredentials = async () => {
     if (!orderItemId) return;
 
-    const { data, error } = await supabase
+    // First get order item info
+    const { data: orderItem, error: orderError } = await supabase
       .from('order_items')
-      .select('credentials, products(name)')
+      .select('id, expires_at, products(name, requires_totp), orders!inner(status)')
       .eq('id', orderItemId)
       .single();
 
-    if (error || !data?.credentials) {
+    if (orderError) {
+      console.error('Error loading order item:', orderError);
       toast({
         title: 'خطا',
         description: 'اطلاعات یافت نشد',
@@ -44,7 +47,91 @@ const DashboardCredentials = () => {
       return;
     }
 
-    setCredentials(data.credentials);
+    // Check if order is still pending
+    const orderData = orderItem as any;
+    if (orderData?.orders?.status === 'pending') {
+      toast({
+        title: 'در انتظار تحویل',
+        description: 'اطلاعات ورود شما هنوز آماده نشده است. لطفاً کمی صبر کنید یا با پشتیبانی تماس بگیرید.',
+        variant: 'default'
+      });
+      navigate('/account/orders');
+      return;
+    }
+
+    // Get the user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: 'خطا',
+        description: 'لطفا ابتدا وارد شوید',
+        variant: 'destructive'
+      });
+      navigate('/auth');
+      return;
+    }
+
+    // Get the account seat with credentials
+    const { data: seat, error: seatError } = await supabase
+      .from('account_seats')
+      .select(`
+        id,
+        status,
+        product_credentials(
+          username,
+          password,
+          additional_info,
+          totp_secret
+        )
+      `)
+      .eq('order_item_id', orderItemId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (seatError || !seat) {
+      console.error('Error loading seat:', seatError);
+      toast({
+        title: 'خطا',
+        description: 'اطلاعات ورود یافت نشد',
+        variant: 'destructive'
+      });
+      navigate('/account/orders');
+      return;
+    }
+
+    // Check if expired
+    if (orderData?.expires_at && new Date(orderData.expires_at) < new Date()) {
+      toast({
+        title: 'اشتراک منقضی شده',
+        description: 'این اشتراک منقضی شده است. لطفا برای تمدید با پشتیبانی تماس بگیرید.',
+        variant: 'destructive'
+      });
+      navigate('/account/orders');
+      return;
+    }
+
+    // Format credentials data
+    const seatData = seat as any;
+    const hasTotpSecret = !!seatData.product_credentials?.totp_secret;
+    
+    const credData = {
+      username: seatData.product_credentials?.username,
+      password: seatData.product_credentials?.password,
+      additional_info: seatData.product_credentials?.additional_info,
+      requires_totp: hasTotpSecret, // Show TOTP section if secret exists
+      totp_secret: seatData.product_credentials?.totp_secret
+    };
+
+    console.log('Credentials loaded:', {
+      username: credData.username,
+      has_totp_secret: hasTotpSecret,
+      product_requires_totp: orderData.products?.requires_totp,
+      final_requires_totp: credData.requires_totp,
+      seat_id: seatData.id
+    });
+
+    setCredentials(credData);
+    setOrderData(orderData);
     setLoading(false);
   };
 
@@ -89,6 +176,34 @@ const DashboardCredentials = () => {
               این اطلاعات تنها یک بار نمایش داده می‌شود. لطفاً آن‌ها را در جای امنی ذخیره کنید.
             </AlertDescription>
           </Alert>
+
+          {/* Expiration Info */}
+          {orderData && (
+            <Card className="glass-card border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Key className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">وضعیت اشتراک</p>
+                      {orderData.expires_at ? (
+                        <>
+                          <p className="font-bold">
+                            منقضی می‌شود: {new Date(orderData.expires_at).toLocaleDateString('fa-IR')}
+                          </p>
+                          {new Date(orderData.expires_at) < new Date() && (
+                            <p className="text-sm text-red-500">این اشتراک منقضی شده است</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="font-bold text-green-500">اشتراک دائمی (بدون محدودیت زمانی)</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {!revealed ? (
             <Card className="glass-card border-primary/20">

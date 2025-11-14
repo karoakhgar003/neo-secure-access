@@ -124,6 +124,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          plan_id: string | null
           product_id: string
           quantity: number
           user_id: string
@@ -131,6 +132,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          plan_id?: string | null
           product_id: string
           quantity?: number
           user_id: string
@@ -138,6 +140,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          plan_id?: string | null
           product_id?: string
           quantity?: number
           user_id?: string
@@ -148,6 +151,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "product_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -186,6 +196,7 @@ export type Database = {
           expires_at: string | null
           id: string
           order_id: string
+          plan_id: string | null
           price: number
           product_id: string
           quantity: number
@@ -196,6 +207,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           order_id: string
+          plan_id?: string | null
           price: number
           product_id: string
           quantity?: number
@@ -206,6 +218,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           order_id?: string
+          plan_id?: string | null
           price?: number
           product_id?: string
           quantity?: number
@@ -216,6 +229,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "product_plans"
             referencedColumns: ["id"]
           },
           {
@@ -276,6 +296,7 @@ export type Database = {
           is_assigned: boolean | null
           max_seats: number | null
           password: string
+          plan_id: string | null
           product_id: string
           totp_secret: string | null
           username: string
@@ -289,6 +310,7 @@ export type Database = {
           is_assigned?: boolean | null
           max_seats?: number | null
           password: string
+          plan_id?: string | null
           product_id: string
           totp_secret?: string | null
           username: string
@@ -302,6 +324,7 @@ export type Database = {
           is_assigned?: boolean | null
           max_seats?: number | null
           password?: string
+          plan_id?: string | null
           product_id?: string
           totp_secret?: string | null
           username?: string
@@ -309,6 +332,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "product_credentials_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_credentials_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "product_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_plans: {
+        Row: {
+          id: string
+          product_id: string
+          name: string
+          description: string | null
+          price: number
+          duration_months: number | null
+          features: Json | null
+          is_available: boolean | null
+          sort_order: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          name: string
+          description?: string | null
+          price: number
+          duration_months?: number | null
+          features?: Json | null
+          is_available?: boolean | null
+          sort_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          name?: string
+          description?: string | null
+          price?: number
+          duration_months?: number | null
+          features?: Json | null
+          is_available?: boolean | null
+          sort_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_plans_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
@@ -326,7 +406,7 @@ export type Database = {
           image_url: string | null
           is_available: boolean | null
           name: string
-          price: number
+          price: number | null
           requires_totp: boolean | null
           slug: string
           updated_at: string
@@ -340,7 +420,7 @@ export type Database = {
           image_url?: string | null
           is_available?: boolean | null
           name: string
-          price: number
+          price?: number | null
           requires_totp?: boolean | null
           slug: string
           updated_at?: string
@@ -354,7 +434,7 @@ export type Database = {
           image_url?: string | null
           is_available?: boolean | null
           name?: string
-          price?: number
+          price?: number | null
           requires_totp?: boolean | null
           slug?: string
           updated_at?: string
@@ -469,6 +549,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_credentials_to_pending_orders: {
+        Args: {
+          p_product_id?: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

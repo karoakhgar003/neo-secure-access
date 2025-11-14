@@ -1,19 +1,25 @@
 import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingCart, Star, Shield, Zap, HeadphonesIcon, AlertCircle } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ShoppingCart, Star, Shield, Zap, HeadphonesIcon, AlertCircle, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/hooks/useCart";
+import { useToast } from "@/hooks/use-toast";
 
 const ProductDetail = () => {
   const { slug } = useParams();
   const { addToCart } = useCart();
+  const { toast } = useToast();
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
@@ -28,7 +34,48 @@ const ProductDetail = () => {
     }
   });
 
+  const { data: plans } = useQuery({
+    queryKey: ["product-plans", product?.id],
+    queryFn: async () => {
+      if (!product?.id) return [];
+      const { data, error } = await supabase
+        .from("product_plans")
+        .select("*")
+        .eq("product_id", product.id)
+        .eq("is_available", true)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      
+      // Auto-select first plan if available
+      if (data && data.length > 0 && !selectedPlan) {
+        setSelectedPlan(data[0].id);
+      }
+      
+      return data || [];
+    },
+    enabled: !!product?.id,
+  });
+
   const formatPrice = (price: number) => new Intl.NumberFormat('fa-IR').format(price);
+
+  const hasPlans = plans && plans.length > 0;
+  const selectedPlanData = hasPlans && selectedPlan ? plans.find(p => p.id === selectedPlan) : null;
+  const displayPrice = selectedPlanData ? selectedPlanData.price : product?.price || 0;
+
+  const handleAddToCart = () => {
+    if (!product) return;
+    
+    if (hasPlans && !selectedPlan) {
+      toast({
+        title: 'لطفاً یک پلن انتخاب کنید',
+        description: 'برای افزودن به سبد خرید باید یک پلن را انتخاب کنید',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    addToCart(product.id, 1, selectedPlan || undefined);
+  };
 
   if (isLoading) {
     return (
@@ -79,11 +126,60 @@ const ProductDetail = () => {
           <div>
             <h1 className="text-4xl font-bold mb-4">{product.name}</h1>
             <div className="flex items-center gap-4 mb-6">
-              <span className="text-4xl font-bold text-primary">{formatPrice(Number(product.price))}<span className="text-lg mr-2">تومان</span></span>
+              <span className="text-4xl font-bold text-primary">{formatPrice(Number(displayPrice))}<span className="text-lg mr-2">تومان</span></span>
             </div>
             {product.description && (
               <p className="text-muted-foreground leading-relaxed mb-6">{product.description}</p>
             )}
+
+            {/* Plans Selection */}
+            {hasPlans && (
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-3">انتخاب پلن:</h3>
+                <RadioGroup value={selectedPlan || ''} onValueChange={setSelectedPlan}>
+                  <div className="space-y-3">
+                    {plans.map((plan) => (
+                      <div key={plan.id} className="relative">
+                        <RadioGroupItem value={plan.id} id={plan.id} className="peer sr-only" />
+                        <Label
+                          htmlFor={plan.id}
+                          className="flex items-start gap-4 p-4 rounded-lg border-2 border-muted bg-background hover:bg-accent cursor-pointer transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-lg">{plan.name}</span>
+                              {plan.duration_months && plan.duration_months > 1 && (
+                                <Badge variant="secondary">{plan.duration_months} ماهه</Badge>
+                              )}
+                            </div>
+                            {plan.description && (
+                              <p className="text-sm text-muted-foreground mb-2">{plan.description}</p>
+                            )}
+                            {plan.features && Array.isArray(plan.features) && (plan.features as string[]).length > 0 && (
+                              <ul className="text-sm space-y-1">
+                                {(plan.features as string[]).map((feature, idx) => (
+                                  <li key={idx} className="flex items-center gap-2">
+                                    <Check className="h-3 w-3 text-primary" />
+                                    <span>{feature}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-xl text-primary">
+                              {formatPrice(Number(plan.price))}
+                            </span>
+                            <span className="text-sm block text-muted-foreground">تومان</span>
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+
             {product.requires_totp && (
               <Alert className="mb-6 border-primary/30 bg-primary/5">
                 <AlertCircle className="h-4 w-4 text-primary" />
@@ -93,7 +189,13 @@ const ProductDetail = () => {
               </Alert>
             )}
             <div className="flex items-center gap-4 mb-8">
-              <Button variant="hero" size="lg" className="flex-1" onClick={() => addToCart(product.id, 1)}>
+              <Button 
+                variant="hero" 
+                size="lg" 
+                className="flex-1" 
+                onClick={handleAddToCart}
+                disabled={hasPlans && !selectedPlan}
+              >
                 <ShoppingCart className="ml-2 h-5 w-5" />
                 افزودن به سبد خرید
               </Button>

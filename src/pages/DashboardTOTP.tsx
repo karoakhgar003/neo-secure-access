@@ -1,12 +1,60 @@
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Info, Shield, Clock } from "lucide-react";
+import { Send, Info, Shield, Clock, Key } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const DashboardTOTP = () => {
   const telegramBotLink = "https://t.me/neoaccount_bot";
+  const { user } = useAuth();
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      loadTOTPOrderItems();
+    }
+  }, [user]);
+
+  const loadTOTPOrderItems = async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        order_number,
+        order_items!left(
+          id,
+          credential_data,
+          product_name,
+          plan_name,
+          products!left(requires_totp)
+        )
+      `)
+      .eq('user_id', user?.id)
+      .order('created_at', { ascending: false });
+
+    // Filter to only items that have credentials and require TOTP
+    const totpItems = data?.flatMap(order => 
+      order.order_items
+        ?.filter((item: any) => 
+          item.credential_data && 
+          item.products?.requires_totp &&
+          item.credential_data.requires_totp
+        )
+        .map((item: any) => ({
+          ...item,
+          order_number: order.order_number
+        }))
+    ) || [];
+
+    setOrderItems(totpItems);
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen">
@@ -23,6 +71,44 @@ const DashboardTOTP = () => {
               این سرویس نیاز به دریافت کد تأیید دو مرحله‌ای (TOTP) از طریق ربات تلگرام دارد.
             </AlertDescription>
           </Alert>
+
+          {/* List of order items that need TOTP */}
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            </div>
+          ) : orderItems.length > 0 ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">سفارشات شما که نیاز به TOTP دارند:</h2>
+              {orderItems.map((item, idx) => (
+                <Card key={item.id} className="glass-card border-primary/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold">{item.product_name || 'محصول'}</h3>
+                        {item.plan_name && (
+                          <p className="text-sm text-muted-foreground">پلن: {item.plan_name}</p>
+                        )}
+                        <p className="text-sm text-muted-foreground">سفارش: {item.order_number}</p>
+                      </div>
+                      <Link to={`/dashboard/credentials/${item.id}`}>
+                        <Button variant="hero" className="gap-2">
+                          <Key className="h-4 w-4" />
+                          مشاهده و دریافت کد
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="glass-card border-primary/20">
+              <CardContent className="p-12 text-center">
+                <p className="text-muted-foreground">شما سفارشی که نیاز به TOTP داشته باشد ندارید.</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="glass-card border-primary/20">
             <CardContent className="p-12 text-center">

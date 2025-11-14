@@ -70,26 +70,65 @@ const Checkout = () => {
           total_amount: cartTotal,
           contact_email: contactEmail,
           contact_phone: contactPhone,
-          status: 'pending'
+          status: 'pending' // Start as pending, will be completed when credentials are assigned
         })
         .select()
         .single();
 
       if (orderError) throw orderError;
 
-      // Create order items
-      const orderItems = cartItems.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: Number(item.products.price)
-      }));
+      // Create order items - expand quantity into separate items
+      // If quantity=2, create 2 separate order_items so each gets its own credential
+      const orderItems = cartItems.flatMap(item => {
+        const itemPrice = item.product_plans?.price || item.products.price || 0;
+        console.log('Cart item:', {
+          product_id: item.product_id,
+          plan_id: item.plan_id,
+          plan_name: item.product_plans?.name,
+          quantity: item.quantity,
+          price: itemPrice
+        });
+        
+        // Create separate order_item for each quantity
+        return Array.from({ length: item.quantity }, () => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          plan_id: item.plan_id || null,
+          quantity: 1, // Each order_item represents 1 unit
+          price: Number(itemPrice)
+        }));
+      });
+
+      console.log('Creating order items (expanded by quantity):', orderItems);
 
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error('Error creating order items:', itemsError);
+        throw itemsError;
+      }
+
+      // Trigger credential assignment for this order
+      console.log('=== STARTING CREDENTIAL ASSIGNMENT ===');
+      for (const item of orderItems) {
+        console.log('Calling assign_credentials_to_pending_orders with product_id:', item.product_id);
+        console.log('Expected to match plan_id:', item.plan_id);
+        
+        const { data: assignData, error: assignError } = await supabase.rpc('assign_credentials_to_pending_orders', {
+          p_product_id: item.product_id
+        });
+        
+        console.log('Assignment function returned:', assignData);
+        
+        if (assignError) {
+          console.error('Credential assignment error:', assignError);
+        } else {
+          console.log('Assignment function completed successfully');
+        }
+      }
+      console.log('=== CREDENTIAL ASSIGNMENT COMPLETE ===');
 
       // Clear cart
       await clearCart();
@@ -190,12 +229,22 @@ const Checkout = () => {
                 <h2 className="text-2xl font-bold">خلاصه سفارش</h2>
 
                 <div className="space-y-3">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{item.products.name}</span>
-                      <span className="font-medium">{formatPrice(Number(item.products.price) * item.quantity)} تومان</span>
-                    </div>
-                  ))}
+                  {cartItems.map((item) => {
+                    const itemPrice = item.product_plans?.price || item.products.price || 0;
+                    return (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <div className="flex flex-col">
+                          <span className="text-muted-foreground">{item.products.name}</span>
+                          {item.product_plans && (
+                            <span className="text-xs text-muted-foreground/70">
+                              پلن: {item.product_plans.name}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-medium">{formatPrice(Number(itemPrice) * item.quantity)} تومان</span>
+                      </div>
+                    );
+                  })}
 
                   <div className="border-t border-border pt-3">
                     <div className="flex justify-between text-xl font-bold">

@@ -6,19 +6,26 @@ import { useToast } from '@/hooks/use-toast';
 export interface CartItem {
   id: string;
   product_id: string;
+  plan_id: string | null;
   quantity: number;
   products: {
     name: string;
-    price: number;
+    price: number | null;
     image_url: string | null;
     slug: string;
   };
+  product_plans?: {
+    id: string;
+    name: string;
+    price: number;
+    duration_months: number;
+  } | null;
 }
 
 interface CartContextType {
   cartItems: CartItem[];
   loading: boolean;
-  addToCart: (productId: string, quantity: number) => Promise<void>;
+  addToCart: (productId: string, quantity: number, planId?: string) => Promise<void>;
   updateQuantity: (cartItemId: string, newQuantity: number) => Promise<void>;
   removeFromCart: (cartItemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -47,12 +54,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       .select(`
         id,
         product_id,
+        plan_id,
         quantity,
         products (
           name,
           price,
           image_url,
           slug
+        ),
+        product_plans (
+          id,
+          name,
+          price,
+          duration_months
         )
       `)
       .eq('user_id', user.id);
@@ -74,7 +88,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     loadCart();
   }, [user]);
 
-  const addToCart = async (productId: string, quantity: number = 1) => {
+  const addToCart = async (productId: string, quantity: number = 1, planId?: string) => {
     if (!user) {
       toast({
         title: 'لطفا وارد شوید',
@@ -84,8 +98,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Check if item already exists
-    const existingItem = cartItems.find(item => item.product_id === productId);
+    // Check if item already exists with same plan
+    const existingItem = cartItems.find(item => 
+      item.product_id === productId && item.plan_id === (planId || null)
+    );
 
     if (existingItem) {
       await updateQuantity(existingItem.id, existingItem.quantity + quantity);
@@ -95,6 +111,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         .insert({
           user_id: user.id,
           product_id: productId,
+          plan_id: planId || null,
           quantity
         });
 
@@ -176,7 +193,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const cartTotal = cartItems.reduce((sum, item) => {
-    return sum + (Number(item.products.price) * item.quantity);
+    // Use plan price if available, otherwise fall back to product price
+    const price = item.product_plans?.price || item.products.price || 0;
+    return sum + (Number(price) * item.quantity);
   }, 0);
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);

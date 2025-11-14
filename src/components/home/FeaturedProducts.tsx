@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useCart } from "@/hooks/useCart";
+
 const FeaturedProducts = () => {
   const { data: products, isLoading } = useQuery({
     queryKey: ["featured-products"],
@@ -21,7 +21,6 @@ const FeaturedProducts = () => {
       return data;
     }
   });
-  const { addToCart } = useCart();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('fa-IR').format(price);
@@ -87,24 +86,19 @@ const FeaturedProducts = () => {
                   </Link>
 
                   {product.description && (
-                    <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
+                    <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
                       {product.description}
                     </p>
                   )}
-
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl font-bold text-primary">
-                      {formatPrice(Number(product.price))}
-                      <span className="text-sm mr-1">تومان</span>
-                    </span>
-                  </div>
                 </CardContent>
 
                 <CardFooter className="p-6 pt-0">
-                  <Button variant="hero" className="w-full group" onClick={() => addToCart(product.id, 1)}>
-                    <ShoppingCart className="ml-2 h-4 w-4 group-hover:scale-110 transition-transform" />
-                    افزودن به سبد خرید
-                  </Button>
+                  <Link to={`/p/${product.slug}`} className="w-full">
+                    <Button variant="hero" className="w-full group">
+                      <ArrowLeft className="ml-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                      مشاهده و انتخاب پلن
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
             </div>

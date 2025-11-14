@@ -1,259 +1,212 @@
-import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Users, Package, FileText, ShoppingCart, FolderTree, Key } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+﻿import { useEffect, useState } from "react";
+import Header from "@/components/layout/Header";
+import AdminSidebar from "@/components/admin/AdminSidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users, Package, ShoppingCart, TrendingUp, DollarSign, Activity } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+
+type TimePeriod = "7" | "30" | "90" | "180" | "365";
 
 export default function AdminDashboard() {
+  const [period, setPeriod] = useState<TimePeriod>("30");
   const [stats, setStats] = useState({
     users: 0,
     products: 0,
-    blogPosts: 0,
     orders: 0,
-    categories: 0,
-    totalEarnings: 0
+    totalEarnings: 0,
+    pendingOrders: 0,
+    completedOrders: 0
   });
   const [revenueData, setRevenueData] = useState<{ date: string; revenue: number }[]>([]);
   const [orderData, setOrderData] = useState<{ date: string; count: number }[]>([]);
+  const [orderStatusData, setOrderStatusData] = useState<{ name: string; value: number }[]>([]);
+  const [topProducts, setTopProducts] = useState<{ name: string; sales: number }[]>([]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadStats = async () => {
-      const [usersRes, productsRes, postsRes, ordersRes, categoriesRes, earningsRes, allOrdersRes] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('products').select('id', { count: 'exact', head: true }),
-        supabase.from('blog_posts').select('id', { count: 'exact', head: true }),
-        supabase.from('orders').select('id', { count: 'exact', head: true }),
-        supabase.from('categories').select('id', { count: 'exact', head: true }),
-        supabase.from('orders').select('total_amount').eq('status', 'completed'),
-        supabase.from('orders').select('created_at, total_amount, status').order('created_at', { ascending: true })
-      ]);
+    loadDashboardData();
+  }, [period]);
 
-      const totalEarnings = (earningsRes.data || []).reduce((sum, order) => sum + Number(order.total_amount), 0);
+  const loadDashboardData = async () => {
+    const daysAgo = parseInt(period);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
 
-      setStats({
-        users: usersRes.count || 0,
-        products: productsRes.count || 0,
-        blogPosts: postsRes.count || 0,
-        orders: ordersRes.count || 0,
-        categories: categoriesRes.count || 0,
-        totalEarnings
+    const [usersRes, productsRes, ordersRes, earningsRes] = await Promise.all([
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase.from("products").select("id", { count: "exact", head: true }),
+      supabase.from("orders").select("id", { count: "exact", head: true }),
+      supabase.from("orders").select("total_amount, status").eq("status", "completed")
+    ]);
+
+    const totalEarnings = (earningsRes.data || []).reduce((sum, order) => sum + Number(order.total_amount), 0);
+
+    const { count: pendingCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+
+    const { count: completedCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "completed");
+
+    setStats({
+      users: usersRes.count || 0,
+      products: productsRes.count || 0,
+      orders: ordersRes.count || 0,
+      totalEarnings,
+      pendingOrders: pendingCount || 0,
+      completedOrders: completedCount || 0
+    });
+
+    const { data: periodOrders } = await supabase
+      .from("orders")
+      .select("created_at, total_amount, status, order_items(product_id, product_name, products(name))")
+      .gte("created_at", startDate.toISOString())
+      .order("created_at", { ascending: true });
+
+    const revenueByDay: Record<string, number> = {};
+    const ordersByDay: Record<string, number> = {};
+    const productSales: Record<string, number> = {};
+    const statusCount: Record<string, number> = { pending: 0, processing: 0, completed: 0, cancelled: 0 };
+
+    (periodOrders || []).forEach(order => {
+      const date = new Date(order.created_at).toLocaleDateString("fa-IR");
+
+      if (order.status === "completed") {
+        revenueByDay[date] = (revenueByDay[date] || 0) + Number(order.total_amount);
+      }
+
+      ordersByDay[date] = (ordersByDay[date] || 0) + 1;
+      statusCount[order.status as keyof typeof statusCount]++;
+
+      const orderItems = order.order_items as any[];
+      (orderItems || []).forEach(item => {
+        const productName = item.product_name || item.products?.name || "نامشخص";
+        productSales[productName] = (productSales[productName] || 0) + 1;
       });
+    });
 
-      // Process revenue data by day
-      const revenueByDay: Record<string, number> = {};
-      const ordersByDay: Record<string, number> = {};
-      
-      (allOrdersRes.data || []).forEach(order => {
-        const date = new Date(order.created_at).toLocaleDateString('fa-IR');
-        if (order.status === 'completed') {
-          revenueByDay[date] = (revenueByDay[date] || 0) + Number(order.total_amount);
-        }
-        ordersByDay[date] = (ordersByDay[date] || 0) + 1;
-      });
+    setRevenueData(Object.entries(revenueByDay).map(([date, revenue]) => ({ date, revenue })));
+    setOrderData(Object.entries(ordersByDay).map(([date, count]) => ({ date, count })));
+    setOrderStatusData([
+      { name: "در انتظار", value: statusCount.pending },
+      { name: "در حال پردازش", value: statusCount.processing },
+      { name: "تکمیل شده", value: statusCount.completed },
+      { name: "لغو شده", value: statusCount.cancelled }
+    ]);
+    setTopProducts(
+      Object.entries(productSales)
+        .map(([name, sales]) => ({ name, sales }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5)
+    );
 
-      setRevenueData(
-        Object.entries(revenueByDay)
-          .map(([date, revenue]) => ({ date, revenue }))
-          .slice(-30) // Last 30 days
-      );
+    const { data: recentOrders } = await supabase
+      .from("orders")
+      .select("order_number, status, created_at, profiles(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-      setOrderData(
-        Object.entries(ordersByDay)
-          .map(([date, count]) => ({ date, count }))
-          .slice(-30)
-      );
+    setRecentActivities(recentOrders || []);
+  };
+
+  const COLORS = ["#0ea5e9", "#8b5cf6", "#10b981", "#f59e0b"];
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: "در انتظار",
+      processing: "در حال پردازش",
+      completed: "تکمیل شده",
+      cancelled: "لغو شده"
     };
-
-    loadStats();
-  }, []);
+    return labels[status] || status;
+  };
 
   return (
-    <div className="min-h-screen">
+    <>
       <Header />
-      <main className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-8">
-          پنل <span className="gradient-primary bg-clip-text text-transparent">مدیریت</span>
-        </h1>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
-          <Link to="/admin/users">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+      <div className="flex min-h-screen bg-background">
+        <AdminSidebar />
+        <main className="mr-64 flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">
+                داشبورد <span className="gradient-primary bg-clip-text text-transparent">مدیریت</span>
+              </h1>
+              <p className="text-muted-foreground">خلاصهای از عملکرد سیستم</p>
+            </div>
+            <Select value={period} onValueChange={(value) => setPeriod(value as TimePeriod)}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7 روز گذشته</SelectItem>
+                <SelectItem value="30">30 روز گذشته</SelectItem>
+                <SelectItem value="90">3 ماه گذشته</SelectItem>
+                <SelectItem value="180">6 ماه گذشته</SelectItem>
+                <SelectItem value="365">یک سال گذشته</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="glass-card border-primary/20">
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Users className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">کاربران</p>
-                    <p className="text-3xl font-bold">{stats.users}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Users className="h-6 w-6 text-blue-500" />
                   </div>
+                  <TrendingUp className="h-4 w-4 text-green-500" />
                 </div>
+                <p className="text-sm text-muted-foreground mb-1">کاربران</p>
+                <p className="text-3xl font-bold">{stats.users.toLocaleString("fa-IR")}</p>
               </CardContent>
             </Card>
-          </Link>
-
-          <Link to="/admin/products">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+            <Card className="glass-card border-primary/20">
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Package className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">محصولات</p>
-                    <p className="text-3xl font-bold">{stats.products}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <Package className="h-6 w-6 text-purple-500" />
                   </div>
+                  <Activity className="h-4 w-4 text-blue-500" />
                 </div>
+                <p className="text-sm text-muted-foreground mb-1">محصولات</p>
+                <p className="text-3xl font-bold">{stats.products.toLocaleString("fa-IR")}</p>
               </CardContent>
             </Card>
-          </Link>
-
-          <Link to="/admin/blog">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+            <Card className="glass-card border-primary/20">
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <FileText className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">مقالات</p>
-                    <p className="text-3xl font-bold">{stats.blogPosts}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <ShoppingCart className="h-6 w-6 text-green-500" />
                   </div>
+                  <span className="text-xs text-yellow-500">{stats.pendingOrders} در انتظار</span>
                 </div>
+                <p className="text-sm text-muted-foreground mb-1">سفارشات</p>
+                <p className="text-3xl font-bold">{stats.orders.toLocaleString("fa-IR")}</p>
               </CardContent>
             </Card>
-          </Link>
-
-          <Link to="/admin/orders">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-all cursor-pointer h-full">
+            <Card className="glass-card border-primary/20">
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <ShoppingCart className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">سفارشات</p>
-                    <p className="text-3xl font-bold">{stats.orders}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-orange-500" />
                   </div>
+                  <TrendingUp className="h-4 w-4 text-green-500" />
                 </div>
+                <p className="text-sm text-muted-foreground mb-1">درآمد کل</p>
+                <p className="text-2xl font-bold">{stats.totalEarnings.toLocaleString("fa-IR")}</p>
+                <p className="text-xs text-muted-foreground">تومان</p>
               </CardContent>
             </Card>
-          </Link>
-
-          <Card className="glass-card border-primary/20">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <ShoppingCart className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">درآمد کل</p>
-                  <p className="text-2xl font-bold">{stats.totalEarnings.toLocaleString('fa-IR')} تومان</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
-          <Card className="glass-card border-primary/20">
-            <CardHeader>
-              <CardTitle>درآمد روزانه (30 روز گذشته)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip 
-                    formatter={(value: number) => `${value.toLocaleString('fa-IR')} تومان`}
-                    labelFormatter={(label) => `تاریخ: ${label}`}
-                  />
-                  <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card border-primary/20">
-            <CardHeader>
-              <CardTitle>تعداد سفارشات روزانه (30 روز گذشته)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={orderData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip 
-                    formatter={(value: number) => `${value} سفارش`}
-                    labelFormatter={(label) => `تاریخ: ${label}`}
-                  />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link to="/admin/users">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <Users className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">مدیریت کاربران</h2>
-                <p className="text-muted-foreground">مشاهده و مدیریت کاربران</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/admin/products">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <Package className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">مدیریت محصولات</h2>
-                <p className="text-muted-foreground">افزودن و ویرایش محصولات</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/admin/blog">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <FileText className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">مدیریت مقالات</h2>
-                <p className="text-muted-foreground">افزودن و ویرایش مقالات</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/admin/orders">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <ShoppingCart className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">مدیریت سفارشات</h2>
-                <p className="text-muted-foreground">مشاهده و مدیریت سفارشات</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/admin/categories">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <FolderTree className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">مدیریت دسته‌بندی‌ها</h2>
-                <p className="text-muted-foreground">افزودن و ویرایش دسته‌بندی‌ها</p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link to="/admin/product-credentials">
-            <Card className="glass-card border-primary/20 hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-6">
-                <Key className="h-12 w-12 text-primary mb-4" />
-                <h2 className="text-2xl font-bold mb-2">اعتبارنامه‌های آماده</h2>
-                <p className="text-muted-foreground">مدیریت اعتبارنامه‌های تحویل فوری</p>
-              </CardContent>
-            </Card>
-          </Link>
+          </div>
         </div>
       </main>
-      <Footer />
     </div>
+    </>
   );
 }

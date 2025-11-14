@@ -81,7 +81,9 @@ const Cart = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
-              {cartItems.map((item) => (
+              {cartItems.map((item) => {
+                const itemPrice = item.product_plans?.price || item.products.price || 0;
+                return (
                 <Card key={item.id} className="glass-card border-primary/20">
                   <CardContent className="p-6">
                     <div className="flex gap-4">
@@ -92,8 +94,14 @@ const Cart = () => {
                       />
                       <div className="flex-1">
                         <h3 className="font-bold text-lg mb-2">{item.products.name}</h3>
+                        {item.product_plans && (
+                          <p className="text-sm text-muted-foreground mb-1">
+                            پلن: {item.product_plans.name}
+                            {item.product_plans.duration_months > 1 && ` (${item.product_plans.duration_months} ماهه)`}
+                          </p>
+                        )}
                         <p className="text-primary font-bold text-xl">
-                          {formatPrice(Number(item.products.price))} تومان
+                          {formatPrice(Number(itemPrice))} تومان
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-4">
@@ -128,7 +136,8 @@ const Cart = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
 
             {/* Order Summary */}

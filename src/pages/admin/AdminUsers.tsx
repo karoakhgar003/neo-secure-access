@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Shield, Edit, Trash2, Eye } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Shield, Edit, Trash2, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface UserProfile {
@@ -132,24 +131,22 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="min-h-screen">
+    <>
       <Header />
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold">
-            مدیریت <span className="gradient-primary bg-clip-text text-transparent">کاربران</span>
-          </h1>
-          <Link to="/admin">
-            <Button variant="outline" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              بازگشت به پنل
-            </Button>
-          </Link>
-        </div>
+      <div className="flex min-h-screen bg-background">
+        <AdminSidebar />
+        <main className="mr-64 flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-2">
+              مدیریت <span className="gradient-primary bg-clip-text text-transparent">کاربران</span>
+            </h1>
+            <p className="text-muted-foreground">مشاهده و مدیریت کاربران سیستم</p>
+          </div>
 
-        <Card className="glass-card border-primary/20">
-          <CardContent className="p-6">
-            {loading ? (
+          <Card className="glass-card border-primary/20">
+            <CardContent className="p-6">
+              {loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
               </div>
@@ -251,8 +248,9 @@ export default function AdminUsers() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </main>
-      <Footer />
     </div>
+    </>
   );
 }

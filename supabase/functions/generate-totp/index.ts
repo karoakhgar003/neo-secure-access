@@ -38,6 +38,42 @@ Deno.serve(async (req) => {
 
     console.log(`[TOTP] User ${user.id} requesting TOTP for order item ${orderItemId}`);
 
+    // Check if the order item is expired
+    const { data: orderItemCheck, error: checkError } = await supabaseClient
+      .from('order_items')
+      .select('expires_at, status, product_name')
+      .eq('id', orderItemId)
+      .single();
+
+    if (checkError) {
+      console.error('[TOTP] Error checking order item:', checkError);
+      throw new Error('Unable to verify order status');
+    }
+
+    // Check expiration
+    if (orderItemCheck.expires_at && new Date(orderItemCheck.expires_at) < new Date()) {
+      console.log(`[TOTP] Order item ${orderItemId} has expired`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'اشتراک شما منقضی شده است. لطفا برای تمدید با پشتیبانی تماس بگیرید.',
+          expired: true,
+          expires_at: orderItemCheck.expires_at
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (orderItemCheck.status === 'expired') {
+      console.log(`[TOTP] Order item ${orderItemId} is marked as expired`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'اشتراک شما منقضی شده است.',
+          expired: true
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get the seat for this order item and user
     const { data: seatRow, error: seatError } = await supabaseClient
       .from('account_seats')
@@ -151,61 +187,57 @@ Deno.serve(async (req) => {
     if (seat.status === 'locked') {
       return new Response(
         JSON.stringify({ 
-          error: 'Seat is locked. Please contact support.',
+          error: 'حساب شما قفل شده است. لطفا با پشتیبانی تماس بگیرید.',
           locked: true,
           lock_reason: seat.lock_reason
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (seat.status === 'success') {
+      // Allow generating TOTP even after successful login (user might need to login again after logout)
+      // Just show a message but still allow code generation
+      console.log(`[TOTP] Seat ${seat.id} already marked as success, but allowing code generation`);
+    }
+
+    if (seat.attempt_count > 2) {
       return new Response(
         JSON.stringify({ 
-          error: 'You have already successfully logged in.',
-          success: true
+          error: 'شما از حداکثر تلاش‌های مجاز (2 بار) استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.',
+          locked: true
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (seat.attempt_count >= 2) {
-      // If a code was recently issued (final attempt), allow showing it again instead of error
-      if (seat.last_code_issued_at) {
-        const lastIssued = new Date(seat.last_code_issued_at).getTime();
-        const now = Date.now();
-        const timeDiff = (now - lastIssued) / 1000;
-        if (timeDiff < 30) {
-          const remaining = Math.ceil(30 - timeDiff);
-          const totpSecret = credential.totp_secret;
-          if (!totpSecret) {
-            console.error('[TOTP] No TOTP secret found for credential');
-            throw new Error('TOTP not configured for this account');
-          }
-          const totp = new TOTP({ secret: totpSecret });
-          const code = totp.generate();
-          console.log(`[TOTP] Reusing final attempt code for seat ${seat.id}, ${remaining}s remaining`);
-          return new Response(
-            JSON.stringify({
-              code,
-              attempt: seat.attempt_count,
-              isFinalAttempt: true,
-              status: seat.status,
-              expiresIn: remaining,
-              reused: true,
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+    // Allow reusing code within 30s window even if at attempt 2
+    if (seat.attempt_count >= 2 && seat.last_code_issued_at) {
+      const lastIssued = new Date(seat.last_code_issued_at).getTime();
+      const now = Date.now();
+      const timeDiff = (now - lastIssued) / 1000;
+      if (timeDiff < 30) {
+        const remaining = Math.ceil(30 - timeDiff);
+        const totpSecret = credential.totp_secret;
+        if (!totpSecret) {
+          console.error('[TOTP] No TOTP secret found for credential');
+          throw new Error('TOTP not configured for this account');
         }
+        const totp = new TOTP({ secret: totpSecret });
+        const code = totp.generate();
+        console.log(`[TOTP] Reusing final attempt code for seat ${seat.id}, ${remaining}s remaining`);
+        return new Response(
+          JSON.stringify({
+            code,
+            attempt: seat.attempt_count,
+            isFinalAttempt: true,
+            status: seat.status,
+            expiresIn: remaining,
+            reused: true,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-
-    return new Response(
-      JSON.stringify({ 
-        error: 'Maximum attempts reached. Please contact support.',
-        locked: true
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
     }
 
     // Rate limiting: if a code was issued in the last 30s, return the current valid code instead of error

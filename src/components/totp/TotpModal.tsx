@@ -87,42 +87,129 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
     setLoading(true);
     setWaitCountdown(0);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-totp', {
-        body: { orderItemId },
-      });
-
-      if (error) {
-        // Handle edge function non-2xx without throwing
-        const server = (error.context ?? null) as any;
-        if (server?.locked) {
-          setLocked(true);
-          setLockReason(server?.lock_reason || null);
-          setErrorMessage(server?.error || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
-          return;
-        }
-        toast({ title: 'خطا', description: server?.error || 'خطایی رخ داد', variant: 'destructive' });
+      // Get current session to ensure we have auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({ 
+          title: 'خطای احراز هویت', 
+          description: 'لطفا دوباره وارد شوید',
+          variant: 'destructive' 
+        });
+        setLoading(false);
         return;
       }
 
-      if (data.error) {
+      const { data, error } = await supabase.functions.invoke('generate-totp', {
+        body: { orderItemId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      // Check for HTTP-level errors first
+      if (error) {
+        console.error('خطا در تابع Edge دریافت TOTP:', error);
+        console.error('نوع خطا:', error.name);
+        console.error('پیام خطا:', error.message);
+        
+        // Handle network/fetch errors specifically
+        if (error.name === 'FunctionsFetchError' || error.message?.includes('Failed to fetch') || error.message?.includes('Failed to send')) {
+          toast({ 
+            title: 'خطای شبکه', 
+            description: 'امکان اتصال به سرور وجود ندارد. لطفا اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.',
+            variant: 'destructive' 
+          });
+          return;
+        }
+        
+        // Try to extract error details from the response
+        let errorMessage = 'خطایی رخ داد';
+        let isLocked = false;
+        let lockReason = null;
+        
+        // Check if there's a context with error details
+        const server = (error.context ?? null) as any;
+        console.log('Server context:', server);
+        
+        if (server) {
+          if (server.error) {
+            errorMessage = server.error;
+          }
+          if (server.locked) {
+            isLocked = true;
+          }
+          if (server.lock_reason) {
+            lockReason = server.lock_reason;
+          }
+        }
+        
+        // If still generic, try to get from error object
+        if (errorMessage === 'خطایی رخ داد' && error.message && error.message !== 'Edge Function returned a non-2xx status code') {
+          errorMessage = error.message;
+        }
+        
+        // Handle locked account
+        if (isLocked) {
+          setLocked(true);
+          setLockReason(lockReason);
+          setErrorMessage(errorMessage);
+          toast({ 
+            title: 'حساب قفل شده', 
+            description: errorMessage,
+            variant: 'destructive' 
+          });
+          return;
+        }
+        
+        // Show the error message we extracted
+        toast({ 
+          title: 'خطا در دریافت کد', 
+          description: errorMessage,
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      // Check for application-level errors in the response
+      if (data && data.error) {
+        console.error('خطا در پاسخ TOTP:', data);
         if (data.locked) {
           setLocked(true);
-          setErrorMessage('شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
+          setErrorMessage(data.error || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.');
+          toast({ 
+            title: 'حساب قفل شده', 
+            description: data.error || 'شما از حداکثر تلاش‌های مجاز (2 بار) استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.',
+            variant: 'destructive' 
+          });
         } else if (data.success) {
           setSuccess(true);
           toast({ title: 'ورود موفق', description: data.error });
         } else {
-          toast({ title: 'خطا', description: data.error, variant: 'destructive' });
+          toast({ 
+            title: 'خطا', 
+            description: data.error || 'خطایی نامشخص رخ داد. لطفا دوباره تلاش کنید.',
+            variant: 'destructive' 
+          });
         }
         return;
       }
 
-      setCode(data.code);
-      setCountdown(data.expiresIn);
-      setAttempt(data.attempt);
-      setIsFinalAttempt(data.isFinalAttempt);
+      // Success - set the code
+      if (data && data.code) {
+        setCode(data.code);
+        setCountdown(data.expiresIn || 30);
+        setAttempt(data.attempt || 0);
+        setIsFinalAttempt(data.isFinalAttempt || false);
+      } else {
+        toast({ 
+          title: 'خطا', 
+          description: 'پاسخ نامعتبر از سرور دریافت شد',
+          variant: 'destructive' 
+        });
+      }
     } catch (error: any) {
-      console.error('Error generating TOTP:', error);
+      console.error('خطا در تولید کد TOTP:', error);
       const status = error?.status ?? error?.code;
       let server = (error?.context ?? null) as any;
 
@@ -141,15 +228,37 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
           setErrorMessage(
             serverMsg || 'شما از تمام تلاش‌های خود استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.'
           );
+          toast({ 
+            title: 'حساب قفل شده', 
+            description: serverMsg || 'شما از حداکثر تلاش‌های مجاز (2 بار) استفاده کرده‌اید.',
+            variant: 'destructive' 
+          });
           return;
         }
-        toast({ title: 'خطا', description: serverMsg || 'دسترسی غیرمجاز', variant: 'destructive' });
+        toast({ 
+          title: 'خطای دسترسی', 
+          description: serverMsg || 'دسترسی غیرمجاز. لطفا دوباره وارد شوید.',
+          variant: 'destructive' 
+        });
         return;
+      }
+
+      // Generic error with helpful message
+      let errorMessage = 'خطا در دریافت کد. لطفا دوباره تلاش کنید.';
+      
+      if (status === 500) {
+        errorMessage = 'خطای سرور. لطفا چند لحظه صبر کرده و دوباره تلاش کنید.';
+      } else if (status === 400) {
+        errorMessage = server?.error || 'درخواست نامعتبر. لطفا صفحه را رفرش کنید.';
+      } else if (status === 403) {
+        errorMessage = server?.error || 'شما از حداکثر تلاش‌های مجاز استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.';
+      } else if (!navigator.onLine) {
+        errorMessage = 'اتصال اینترنت قطع است. لطفا اتصال خود را بررسی کنید.';
       }
 
       toast({
         title: 'خطا',
-        description: 'خطا در دریافت کد. لطفا دوباره تلاش کنید.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -160,19 +269,46 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
   const confirmLogin = async (success: boolean) => {
     setLoading(true);
     try {
+      // Get current session to ensure we have auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({ 
+          title: 'خطای احراز هویت', 
+          description: 'لطفا دوباره وارد شوید',
+          variant: 'destructive' 
+        });
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('confirm-totp-login', {
         body: { orderItemId, success },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       if (error) {
+        console.error('خطا در تابع Edge تایید ورود:', error);
         const server = (error.context ?? null) as any;
         if (server?.locked) {
           setLocked(true);
           setLockReason(server?.lock_reason || null);
           setErrorMessage(server?.message || 'به دلیل تلاش‌های ناموفق، صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
+          toast({ 
+            title: 'حساب قفل شده', 
+            description: 'به دلیل تلاش‌های ناموفق متوالی، حساب شما قفل شده است.',
+            variant: 'destructive' 
+          });
           return;
         }
-        toast({ title: 'خطا', description: server?.message || server?.error || 'عدم دسترسی', variant: 'destructive' });
+        const errorMsg = server?.message || server?.error || 'خطا در ثبت وضعیت';
+        toast({ 
+          title: 'خطا', 
+          description: errorMsg,
+          variant: 'destructive' 
+        });
         return;
       }
 
@@ -184,24 +320,31 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
         });
         setTimeout(() => onOpenChange(false), 2000);
       } else {
+        console.log('ورود ناموفق، بررسی وضعیت قفل:', data);
         if (data.locked) {
           setLocked(true);
           setLockReason(data.lock_reason || null);
           setErrorMessage('متاسفانه ورود شما موفق نبود و صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
+          toast({
+            title: 'حساب قفل شده',
+            description: 'شما از حداکثر تلاش‌های مجاز (2 بار) استفاده کرده‌اید. لطفا با پشتیبانی تماس بگیرید.',
+            variant: 'destructive',
+          });
         } else {
           // Reset to allow another attempt
           setCode(null);
           setCountdown(30);
           setErrorMessage(null); // Don't show error, show generate button instead
+          const attemptsRemaining = data.attemptsRemaining || 1;
           toast({
             title: 'ورود ناموفق',
-            description: 'لطفا دوباره تلاش کنید. این بار آخرین شانس شماست!',
+            description: `لطفا دوباره تلاش کنید. ${attemptsRemaining} تلاش دیگر باقی مانده است.`,
             variant: 'destructive',
           });
         }
       }
     } catch (error: any) {
-      console.error('Error confirming login:', error);
+      console.error('خطا در تایید ورود:', error);
       const status = error?.status ?? error?.code;
       const context = (error?.context ?? null) as any;
 
@@ -210,15 +353,35 @@ export default function TotpModal({ open, onOpenChange, orderItemId }: TotpModal
         if (context?.locked) {
           setLocked(true);
           setErrorMessage(serverMsg || 'به دلیل تلاش‌های ناموفق، صندلی شما قفل شد. لطفا با پشتیبانی تماس بگیرید.');
+          toast({ 
+            title: 'حساب قفل شده', 
+            description: 'شما از حداکثر تلاش‌های مجاز استفاده کرده‌اید.',
+            variant: 'destructive' 
+          });
           return;
         }
-        toast({ title: 'خطا', description: serverMsg || 'عدم دسترسی', variant: 'destructive' });
+        toast({ 
+          title: 'خطای دسترسی', 
+          description: serverMsg || 'دسترسی غیرمجاز',
+          variant: 'destructive' 
+        });
         return;
+      }
+
+      // Generic error with helpful message
+      let errorMessage = 'خطا در ثبت وضعیت. لطفا دوباره تلاش کنید.';
+      
+      if (status === 500) {
+        errorMessage = 'خطای سرور. لطفا چند لحظه صبر کرده و دوباره تلاش کنید.';
+      } else if (status === 400) {
+        errorMessage = context?.error || 'درخواست نامعتبر. لطفا صفحه را رفرش کنید.';
+      } else if (!navigator.onLine) {
+        errorMessage = 'اتصال اینترنت قطع است. لطفا اتصال خود را بررسی کنید.';
       }
 
       toast({
         title: 'خطا',
-        description: 'خطا در ثبت وضعیت. لطفا دوباره تلاش کنید.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {

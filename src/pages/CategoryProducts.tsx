@@ -4,15 +4,13 @@ import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Filter } from "lucide-react";
+import { ArrowLeft, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useCart } from "@/hooks/useCart";
 
 const CategoryProducts = () => {
   const { slug } = useParams();
-  const { addToCart } = useCart();
 
   const { data, isLoading } = useQuery({
     queryKey: ["category-products", slug],
@@ -41,8 +39,6 @@ const CategoryProducts = () => {
 
   const category = (data as any)?.category;
   const products = (data as any)?.products || [];
-
-  const formatPrice = (price: number) => new Intl.NumberFormat('fa-IR').format(price);
 
   return (
     <div className="min-h-screen">
@@ -105,17 +101,16 @@ const CategoryProducts = () => {
                       <h3 className="text-xl font-bold mb-3 hover:text-primary transition-colors line-clamp-2">{product.name}</h3>
                     </Link>
                     {product.description && (
-                      <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{product.description}</p>
+                      <p className="text-muted-foreground text-sm mb-4 line-clamp-3">{product.description}</p>
                     )}
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl font-bold text-primary">{formatPrice(Number(product.price))}<span className="text-sm mr-1">تومان</span></span>
-                    </div>
                   </CardContent>
                   <CardFooter className="p-6 pt-0">
-                    <Button variant="hero" className="w-full" onClick={() => addToCart(product.id, 1)}>
-                      <ShoppingCart className="ml-2 h-4 w-4" />
-                      افزودن به سبد خرید
-                    </Button>
+                    <Link to={`/p/${product.slug}`} className="w-full">
+                      <Button variant="hero" className="w-full">
+                        <ArrowLeft className="ml-2 h-4 w-4" />
+                        مشاهده و انتخاب پلن
+                      </Button>
+                    </Link>
                   </CardFooter>
                 </Card>
               </div>

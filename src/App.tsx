@@ -31,6 +31,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminBlog from "./pages/admin/AdminBlog";
 import AdminOrders from "./pages/admin/AdminOrders";
+import AdminOrderCredentials from "./pages/admin/AdminOrderCredentials";
 import NotFound from "./pages/NotFound";
 import BlogPost from "./pages/BlogPost";
 import AdminCategories from "./pages/admin/AdminCategories";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/admin/product-credentials" element={<ProtectedRoute requireAdmin><AdminProductCredentials /></ProtectedRoute>} />
             <Route path="/admin/blog" element={<ProtectedRoute requireAdmin><AdminBlog /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute requireAdmin><AdminOrders /></ProtectedRoute>} />
+            <Route path="/admin/credentials/:orderItemId" element={<ProtectedRoute requireAdmin><AdminOrderCredentials /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
             </Routes>
           </CartProvider>

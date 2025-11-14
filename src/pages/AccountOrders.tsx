@@ -20,14 +20,14 @@ interface Order {
   admin_notes?: string | null;
   order_items: {
     id: string;
-    product_id: string;
+    product_id: string | null;
     quantity: number;
     price: number;
-    credentials?: any;
-    products: {
+    has_credentials?: boolean;
+    products?: {
       name: string;
       image_url: string;
-    };
+    } | null;
   }[];
 }
 
@@ -56,13 +56,12 @@ const AccountOrders = () => {
         status,
         total_amount,
         admin_notes,
-        order_items (
+        order_items!left (
           id,
           product_id,
           quantity,
           price,
-          credentials,
-          products (
+          products!left (
             name,
             image_url
           )
@@ -74,7 +73,33 @@ const AccountOrders = () => {
     if (error) {
       console.error('Error loading orders:', error);
     } else {
-      setOrders(data as Order[]);
+      // For each order item, check if it has an account_seat (credentials assigned)
+      const ordersWithSeats = await Promise.all(
+        (data || []).map(async (order) => {
+          const itemsWithSeats = await Promise.all(
+            (order.order_items || []).map(async (item) => {
+              const { data: seat } = await supabase
+                .from('account_seats')
+                .select('id')
+                .eq('order_item_id', item.id)
+                .eq('user_id', user?.id)
+                .single();
+              
+              return {
+                ...item,
+                has_credentials: !!seat
+              };
+            })
+          );
+          
+          return {
+            ...order,
+            order_items: itemsWithSeats
+          };
+        })
+      );
+      
+      setOrders(ordersWithSeats as any);
     }
     setLoading(false);
   };
@@ -113,7 +138,8 @@ const AccountOrders = () => {
       total: order.total_amount,
       status: getStatusText(order.status),
       items: order.order_items.map(item => ({
-        product: item.products.name,
+        product: item.products?.name || 'محصول حذف شده',
+        plan: null,
         quantity: item.quantity,
         price: item.price
       }))
@@ -156,51 +182,71 @@ const AccountOrders = () => {
             {orders.map((order) => (
               <Card key={order.id} className="glass-card border-primary/20">
                 <CardContent className="p-6">
-                  {order.order_items.map((item, idx) => (
-                    <div key={idx} className="flex flex-col md:flex-row gap-6 mb-6 last:mb-0">
-                      <img
-                        src={item.products.image_url || '/placeholder.svg'}
-                        alt={item.products.name}
-                        className="w-24 h-24 rounded-lg object-cover"
-                      />
-                      
-                      <div className="flex-1">
-                        <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-3">
-                          <div>
-                            <h3 className="font-bold text-xl mb-2">{item.products.name}</h3>
-                            <p className="text-muted-foreground text-sm">
-                              شماره سفارش: {order.order_number}
-                            </p>
-                            <p className="text-muted-foreground text-sm">
-                              تاریخ: {new Date(order.created_at).toLocaleDateString('fa-IR')}
-                            </p>
-                            <p className="text-muted-foreground text-sm">
-                              تعداد: {item.quantity}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge className={getStatusBadge(order.status)}>
-                              {getStatusText(order.status)}
-                            </Badge>
-                            <p className="text-primary font-bold text-xl">
-                              {order.total_amount.toLocaleString('fa-IR')} تومان
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex gap-3">
-                          <Button variant="hero" size="sm" className="gap-2" onClick={() => handleDownload(order)}>
-                            <Download className="h-4 w-4" />
-                            دانلود اطلاعات
-                          </Button>
-                          <Button variant="outline" size="sm" className="glass-card border-primary/30 gap-2" onClick={() => handleViewDetails(order)}>
-                            <Eye className="h-4 w-4" />
-                            جزئیات سفارش
-                          </Button>
-                        </div>
-                      </div>
+                  {order.order_items.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">این سفارش هیچ محصولی ندارد (احتمالاً حذف شده)</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        شماره سفارش: {order.order_number}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        تاریخ: {new Date(order.created_at).toLocaleDateString('fa-IR')}
+                      </p>
+                      <p className="text-primary font-bold mt-2">
+                        {order.total_amount.toLocaleString('fa-IR')} تومان
+                      </p>
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {order.order_items.map((item, idx) => (
+                        <div key={idx} className="flex flex-col md:flex-row gap-6 mb-6 last:mb-0">
+                          <img
+                            src={item.products?.image_url || '/placeholder.svg'}
+                            alt={item.products?.name || 'محصول'}
+                            className="w-24 h-24 rounded-lg object-cover"
+                          />
+                          
+                          <div className="flex-1">
+                            <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-3">
+                              <div>
+                                <h3 className="font-bold text-xl mb-2">
+                                  {item.products?.name || 'محصول حذف شده'}
+                                </h3>
+                                <p className="text-muted-foreground text-sm">
+                                  شماره سفارش: {order.order_number}
+                                </p>
+                                <p className="text-muted-foreground text-sm">
+                                  تاریخ: {new Date(order.created_at).toLocaleDateString('fa-IR')}
+                                </p>
+                                <p className="text-muted-foreground text-sm">
+                                  تعداد: {item.quantity}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <Badge className={getStatusBadge(order.status)}>
+                                  {getStatusText(order.status)}
+                                </Badge>
+                                <p className="text-primary font-bold text-xl">
+                                  {order.total_amount.toLocaleString('fa-IR')} تومان
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Show buttons once per order, not per item */}
+                      <div className="flex gap-3 mt-4 pt-4 border-t border-primary/20">
+                        <Button variant="hero" size="sm" className="gap-2" onClick={() => handleDownload(order)}>
+                          <Download className="h-4 w-4" />
+                          دانلود اطلاعات
+                        </Button>
+                        <Button variant="outline" size="sm" className="glass-card border-primary/30 gap-2" onClick={() => handleViewDetails(order)}>
+                          <Eye className="h-4 w-4" />
+                          جزئیات سفارش
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -241,12 +287,14 @@ const AccountOrders = () => {
                     {selectedOrder.order_items.map((item, idx) => (
                       <div key={idx} className="flex gap-4 p-3 rounded-lg glass-card border border-primary/20">
                         <img
-                          src={item.products.image_url || '/placeholder.svg'}
-                          alt={item.products.name}
+                          src={item.products?.image_url || '/placeholder.svg'}
+                          alt={item.products?.name || 'محصول'}
                           className="w-20 h-20 rounded object-cover"
                         />
                         <div className="flex-1">
-                          <p className="font-medium text-lg">{item.products.name}</p>
+                          <p className="font-medium text-lg">
+                            {item.products?.name || 'محصول حذف شده'}
+                          </p>
                           <p className="text-sm text-muted-foreground">تعداد: {item.quantity}</p>
                           <p className="text-sm text-muted-foreground">
                             قیمت واحد: {Number(item.price).toLocaleString('fa-IR')} تومان
@@ -272,20 +320,38 @@ const AccountOrders = () => {
                   </div>
                 )}
 
-                {selectedOrder.status === 'completed' && selectedOrder.order_items?.[0]?.id && (
-                  <Button 
-                    variant="hero" 
-                    size="lg" 
-                    className="w-full gap-2"
-                    onClick={() => {
-                      navigate(`/dashboard/credentials/${selectedOrder.order_items[0].id}`);
-                      setDialogOpen(false);
-                    }}
-                  >
-                    <KeyRound className="h-5 w-5" />
-                    مشاهده اطلاعات دسترسی
-                  </Button>
-                )}
+                {/* Show credential button for each order item */}
+                <div className="space-y-3">
+                  {selectedOrder.order_items.map((item, idx) => {
+                    const hasCredentials = item.has_credentials;
+                    const itemLabel = selectedOrder.order_items.length > 1 ? ` #${idx + 1}` : '';
+                    
+                    return (
+                      <div key={item.id}>
+                        {selectedOrder.status === 'completed' && hasCredentials ? (
+                          <Button 
+                            variant="hero" 
+                            size="lg" 
+                            className="w-full gap-2"
+                            onClick={() => {
+                              navigate(`/dashboard/credentials/${item.id}`);
+                              setDialogOpen(false);
+                            }}
+                          >
+                            <KeyRound className="h-5 w-5" />
+                            مشاهده اطلاعات دسترسی{itemLabel}
+                          </Button>
+                        ) : selectedOrder.status === 'pending' && idx === 0 ? (
+                          <div className="glass-card border border-yellow-500/30 p-4 rounded-lg bg-yellow-500/5">
+                            <p className="text-sm text-center text-yellow-600">
+                              سفارش شما در حال پردازش است. اطلاعات دسترسی به زودی آماده خواهد شد.
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </DialogContent>

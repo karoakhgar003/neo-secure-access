@@ -28,13 +28,16 @@ const Dashboard = () => {
         total_amount,
         status,
         created_at,
-        order_items(
+        order_items!left(
           id,
           quantity,
           price,
           credentials,
+          credential_data,
           expires_at,
-          products(name, requires_totp)
+          product_name,
+          plan_name,
+          products!left(name, requires_totp)
         )
       `)
       .eq('user_id', user.id)
@@ -118,7 +121,14 @@ const Dashboard = () => {
                     <div>
                       <h3 className="text-2xl font-bold mb-2">سفارش #{order.order_number}</h3>
                       <p className="text-muted-foreground">
-                        {order.order_items?.map((item: any) => item.products.name).join(', ')}
+                        {order.order_items?.map((item: any) => 
+                          item.products?.name || item.product_name || 'محصول حذف شده'
+                        ).join(', ')}
+                        {order.order_items?.some((item: any) => item.plan_name) && (
+                          <span className="text-xs mr-2">
+                            ({order.order_items.map((item: any) => item.plan_name).filter(Boolean).join(', ')})
+                          </span>
+                        )}
                       </p>
                     </div>
                     <Badge className={
@@ -133,7 +143,7 @@ const Dashboard = () => {
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="flex items-center gap-3">
                       <Calendar className="h-5 w-5 text-primary" />
                       <div>
@@ -148,25 +158,70 @@ const Dashboard = () => {
                         <p className="font-bold text-primary">{Number(order.total_amount).toLocaleString('fa-IR')} تومان</p>
                       </div>
                     </div>
+                    {order.order_items?.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="text-sm text-muted-foreground">انقضا</p>
+                          {order.order_items[0].expires_at ? (
+                            <>
+                              <p className="font-bold">
+                                {new Date(order.order_items[0].expires_at).toLocaleDateString('fa-IR')}
+                              </p>
+                              {new Date(order.order_items[0].expires_at) < new Date() && (
+                                <Badge variant="destructive" className="text-xs mt-1">منقضی شده</Badge>
+                              )}
+                            </>
+                          ) : (
+                            <p className="font-bold text-green-500">دائمی</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    {order.order_items?.some((item: any) => item.credentials) && (
-                      <Link to={`/dashboard/credentials/${order.order_items[0].id}`}>
-                        <Button variant="hero" className="gap-2">
-                          <Key className="h-4 w-4" />
-                          مشاهده اطلاعات ورود
-                        </Button>
-                      </Link>
-                    )}
-                    {order.order_items?.some((item: any) => item.products.requires_totp) && (
-                      <Link to="/dashboard/totp">
-                        <Button variant="outline" className="glass-card border-primary/30 gap-2">
-                          <Send className="h-4 w-4" />
-                          دریافت کد از تلگرام
-                        </Button>
-                      </Link>
-                    )}
+                    {/* Show a button for EACH order_item with credentials */}
+                    {order.order_items?.map((item: any, idx: number) => (
+                      item.credentials || item.credential_data ? (
+                        <div key={item.id}>
+                          {item.expires_at && new Date(item.expires_at) < new Date() ? (
+                            <Button variant="outline" disabled className="gap-2 opacity-50">
+                              <Key className="h-4 w-4" />
+                              اشتراک {idx + 1} منقضی شده
+                            </Button>
+                          ) : (
+                            <Link to={`/dashboard/credentials/${item.id}`}>
+                              <Button variant="hero" className="gap-2">
+                                <Key className="h-4 w-4" />
+                                مشاهده اطلاعات ورود {order.order_items.length > 1 ? `#${idx + 1}` : ''}
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      ) : null
+                    ))}
+                    
+                    {/* Show TOTP button for EACH order_item that requires TOTP */}
+                    {order.order_items?.map((item: any, idx: number) => (
+                      item.products?.requires_totp ? (
+                        <div key={`totp-${item.id}`}>
+                          {item.expires_at && new Date(item.expires_at) < new Date() ? (
+                            <Button variant="outline" disabled className="gap-2 opacity-50">
+                              <Send className="h-4 w-4" />
+                              اشتراک {idx + 1} منقضی شده
+                            </Button>
+                          ) : (
+                            <Link to={`/dashboard/totp?orderItemId=${item.id}`}>
+                              <Button variant="outline" className="glass-card border-primary/30 gap-2">
+                                <Send className="h-4 w-4" />
+                                دریافت کد {order.order_items.length > 1 ? `#${idx + 1}` : ''}
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      ) : null
+                    ))}
                   </div>
                 </CardContent>
               </Card>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Category { id: string; name: string; slug: string; description: string | null; }
@@ -60,16 +59,23 @@ export default function AdminCategories() {
   };
 
   return (
-    <div className="min-h-screen">
+    <>
       <Header />
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold">مدیریت <span className="gradient-primary bg-clip-text text-transparent">دسته‌بندی‌ها</span></h1>
-          <div className="flex gap-3">
-            <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditing(null); setFormData({ name: '', slug: '', description: '' }); } }}>
-              <DialogTrigger asChild>
-                <Button variant="hero" className="gap-2"><Plus className="h-4 w-4" /> افزودن دسته‌بندی</Button>
-              </DialogTrigger>
+      <div className="flex min-h-screen bg-background">
+        <AdminSidebar />
+        <main className="mr-64 flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">
+                  مدیریت <span className="gradient-primary bg-clip-text text-transparent">دسته‌بندی‌ها</span>
+                </h1>
+                <p className="text-muted-foreground">مدیریت دسته‌بندی محصولات</p>
+              </div>
+              <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditing(null); setFormData({ name: '', slug: '', description: '' }); } }}>
+                <DialogTrigger asChild>
+                  <Button variant="hero" className="gap-2"><Plus className="h-4 w-4" /> افزودن دسته‌بندی</Button>
+                </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader><DialogTitle>{editing ? 'ویرایش دسته‌بندی' : 'افزودن دسته‌بندی جدید'}</DialogTitle></DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,14 +86,12 @@ export default function AdminCategories() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Link to="/admin"><Button variant="outline" className="gap-2"><ArrowLeft className="h-4 w-4" /> بازگشت</Button></Link>
           </div>
-        </div>
 
-        <Card className="glass-card border-primary/20">
-          <CardContent className="p-6">
-            {loading ? (
-              <div className="text-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div></div>
+          <Card className="glass-card border-primary/20">
+            <CardContent className="p-6">
+              {loading ? (
+                <div className="text-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div></div>
             ) : (
               <Table>
                 <TableHeader dir="rtl">
@@ -117,8 +121,9 @@ export default function AdminCategories() {
             )}
           </CardContent>
         </Card>
+        </div>
       </main>
-      <Footer />
     </div>
+    </>
   );
 }

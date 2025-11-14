@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Eye, Link2 } from 'lucide-react';
+import { Eye, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Order {
@@ -29,6 +29,7 @@ interface Order {
     quantity: number;
     price: number;
     credentials: any;
+    credential_data: any;
     products: { name: string; image_url: string };
   }[];
 }
@@ -90,7 +91,7 @@ export default function AdminOrders() {
   const handleViewDetails = async (order: Order) => {
     const { data } = await supabase
       .from('order_items')
-      .select('id, product_id, quantity, price, credentials, products(name, image_url)')
+      .select('id, product_id, quantity, price, credentials, credential_data, products(name, image_url)')
       .eq('order_id', order.id);
     
     setSelectedOrder({ ...order, order_items: data as any });
@@ -99,14 +100,39 @@ export default function AdminOrders() {
   };
 
   const handleOpenAssignDialog = async (orderItemId: string, productId: string) => {
-    // Get available credentials for this product
-    const { data: credentials } = await supabase
+    // First, get the order item's plan_id
+    const { data: orderItem, error: orderItemError } = await supabase
+      .from('order_items')
+      .select('plan_id')
+      .eq('id', orderItemId)
+      .single();
+
+    if (orderItemError || !orderItem) {
+      toast({ title: 'خطا', description: 'خطا در یافتن سفارش', variant: 'destructive' });
+      return;
+    }
+
+    // Get available credentials for this product AND plan
+    let query = supabase
       .from('product_credentials')
-      .select('id, username, max_seats')
+      .select('id, username, max_seats, plan_id')
       .eq('product_id', productId);
+    
+    // Handle NULL vs specific UUID for plan_id
+    if (orderItem.plan_id === null) {
+      query = query.is('plan_id', null);
+    } else {
+      query = query.eq('plan_id', orderItem.plan_id);
+    }
+    
+    const { data: credentials } = await query;
 
     if (!credentials || credentials.length === 0) {
-      toast({ title: 'خطا', description: 'اعتبارنامه‌ای برای این محصول موجود نیست', variant: 'destructive' });
+      toast({ 
+        title: 'خطا', 
+        description: 'اعتبارنامه‌ای برای این پلن موجود نیست. لطفاً ابتدا اعتبارنامه با پلن مناسب اضافه کنید.',
+        variant: 'destructive' 
+      });
       return;
     }
 
@@ -129,7 +155,7 @@ export default function AdminOrders() {
     const available = credentialsWithSeats.filter(c => c.current_seats < c.max_seats);
 
     if (available.length === 0) {
-      toast({ title: 'خطا', description: 'همه اعتبارنامه‌ها پر هستند', variant: 'destructive' });
+      toast({ title: 'خطا', description: 'همه اعتبارنامه‌های این پلن پر هستند', variant: 'destructive' });
       return;
     }
 
@@ -177,40 +203,60 @@ export default function AdminOrders() {
       return;
     }
 
-    // Create seat
-    const { error: seatError } = await supabase
+    // Check if seat already exists
+    const { data: existingSeat } = await supabase
       .from('account_seats')
-      .insert({
-        credential_id: selectedCredential,
-        order_item_id: selectedOrderItem,
-        user_id: order.user_id,
-        status: credential.totp_secret ? 'unclaimed' : 'success'
-      });
+      .select('id')
+      .eq('order_item_id', selectedOrderItem)
+      .maybeSingle();
 
-    if (seatError) {
-      toast({ title: 'خطا', description: 'ایجاد صندلی انجام نشد', variant: 'destructive' });
-      return;
+    if (!existingSeat) {
+      // Create seat only if it doesn't exist
+      const { error: seatError } = await supabase
+        .from('account_seats')
+        .insert({
+          credential_id: selectedCredential,
+          order_item_id: selectedOrderItem,
+          user_id: order.user_id,
+          status: credential.totp_secret ? 'unclaimed' : 'success'
+        });
+
+      if (seatError) {
+        console.error('Seat creation error:', seatError);
+        toast({ title: 'خطا', description: 'ایجاد صندلی انجام نشد: ' + seatError.message, variant: 'destructive' });
+        return;
+      }
     }
 
     // Update order item with credentials
+    const credentialsData = {
+      username: credential.username,
+      password: credential.password,
+      additional_info: credential.additional_info,
+      requires_totp: credential.totp_secret !== null
+    };
+
+    console.log('Updating order item with credentials:', {
+      orderItemId: selectedOrderItem,
+      credentials: credentialsData
+    });
+
     const { error: updateError } = await supabase
       .from('order_items')
       .update({
-        credentials: {
-          username: credential.username,
-          password: credential.password,
-          additional_info: credential.additional_info,
-          requires_totp: credential.totp_secret !== null
-        }
+        credentials: credentialsData
       })
       .eq('id', selectedOrderItem);
 
     if (updateError) {
-      toast({ title: 'خطا', description: 'به‌روزرسانی اعتبارنامه انجام نشد', variant: 'destructive' });
+      console.error('Credentials update error:', updateError);
+      toast({ title: 'خطا', description: 'به‌روزرسانی اعتبارنامه انجام نشد: ' + updateError.message, variant: 'destructive' });
       return;
     }
 
-    // Check if all seats are filled and mark credential as assigned
+    console.log('Credentials updated successfully');
+
+    // Check if all seats are filled and ALL are successful before marking as assigned
     const { count } = await supabase
       .from('account_seats')
       .select('*', { count: 'exact', head: true })
@@ -218,10 +264,20 @@ export default function AdminOrders() {
 
     const cred = availableCredentials.find(c => c.id === selectedCredential);
     if (cred && count && count >= cred.max_seats) {
-      await supabase
-        .from('product_credentials')
-        .update({ is_assigned: true, assigned_at: new Date().toISOString() })
-        .eq('id', selectedCredential);
+      // Check if all seats have status = 'success'
+      const { count: successCount } = await supabase
+        .from('account_seats')
+        .select('*', { count: 'exact', head: true })
+        .eq('credential_id', selectedCredential)
+        .eq('status', 'success');
+      
+      // Only mark as assigned if all seats are successful
+      if (successCount === count) {
+        await supabase
+          .from('product_credentials')
+          .update({ is_assigned: true, assigned_at: new Date().toISOString() })
+          .eq('id', selectedCredential);
+      }
     }
 
     // Update order status to completed
@@ -304,21 +360,165 @@ export default function AdminOrders() {
     return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
   };
 
+  const handleDetachCredential = async (orderItemId: string) => {
+    if (!confirm('آیا مطمئن هستید که می‌خواهید این اعتبارنامه را از سفارش جدا کنید؟')) {
+      return;
+    }
+
+    try {
+      // Get the seat for this order item
+      const { data: seat, error: seatError } = await supabase
+        .from('account_seats')
+        .select('id, credential_id')
+        .eq('order_item_id', orderItemId)
+        .maybeSingle();
+
+      if (seatError) {
+        console.error('Error fetching seat:', seatError);
+        toast({ title: 'خطا', description: 'خطا در یافتن صندلی', variant: 'destructive' });
+        return;
+      }
+
+      if (seat) {
+        // Delete the seat (this will cascade delete TOTP logs)
+        const { error: deleteSeatError } = await supabase
+          .from('account_seats')
+          .delete()
+          .eq('id', seat.id);
+
+        if (deleteSeatError) {
+          console.error('Error deleting seat:', deleteSeatError);
+          toast({ title: 'خطا', description: 'خطا در حذف صندلی', variant: 'destructive' });
+          return;
+        }
+
+        // Check if credential should be marked as unassigned
+        const { count } = await supabase
+          .from('account_seats')
+          .select('*', { count: 'exact', head: true })
+          .eq('credential_id', seat.credential_id);
+
+        const { data: credential } = await supabase
+          .from('product_credentials')
+          .select('max_seats')
+          .eq('id', seat.credential_id)
+          .single();
+
+        // If seats are now below max, mark credential as unassigned
+        if (credential && count !== null && count < credential.max_seats) {
+          await supabase
+            .from('product_credentials')
+            .update({ is_assigned: false, assigned_at: null })
+            .eq('id', seat.credential_id);
+        }
+      }
+
+      // Clear credentials from order item (both old and new columns) and reset status
+      const { error: updateError } = await supabase
+        .from('order_items')
+        .update({ 
+          credentials: null,
+          credential_data: null,
+          status: 'pending'
+        })
+        .eq('id', orderItemId);
+
+      if (updateError) {
+        console.error('Error clearing credentials:', updateError);
+        toast({ title: 'خطا', description: 'خطا در پاک کردن اعتبارنامه', variant: 'destructive' });
+        return;
+      }
+
+      // Update order status back to pending
+      const { data: orderItem } = await supabase
+        .from('order_items')
+        .select('order_id')
+        .eq('id', orderItemId)
+        .single();
+
+      if (orderItem) {
+        await supabase
+          .from('orders')
+          .update({ status: 'pending' })
+          .eq('id', orderItem.order_id);
+      }
+
+      toast({ title: 'موفق', description: 'اعتبارنامه با موفقیت جدا شد' });
+      loadOrders();
+      if (selectedOrder) {
+        handleViewDetails(selectedOrder);
+      }
+    } catch (err) {
+      console.error('Error detaching credential:', err);
+      toast({ title: 'خطا', description: 'خطا در جدا کردن اعتبارنامه', variant: 'destructive' });
+    }
+  };
+
+  const handleProcessPendingOrders = async () => {
+    try {
+      const { data, error } = await supabase.rpc('assign_credentials_to_pending_orders');
+      
+      if (error) {
+        console.error('Error processing pending orders:', error);
+        toast({ 
+          title: 'خطا', 
+          description: 'مشکلی در پردازش سفارشات پیش آمد', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      const results = (data as any[]) || [];
+      const successCount = results.filter((r: any) => r.success).length;
+      const failureCount = results.filter((r: any) => !r.success).length;
+
+      if (successCount > 0) {
+        toast({ 
+          title: 'موفق', 
+          description: `${successCount} سفارش با موفقیت پردازش شد${failureCount > 0 ? ` و ${failureCount} سفارش ناموفق بود` : ''}` 
+        });
+        loadOrders();
+      } else if (failureCount > 0) {
+        toast({ 
+          title: 'توجه', 
+          description: 'هیچ سفارشی پردازش نشد. ممکن است اعتبارنامه کافی موجود نباشد.' 
+        });
+      } else {
+        toast({ 
+          title: 'اطلاع', 
+          description: 'هیچ سفارش در انتظاری یافت نشد' 
+        });
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      toast({ 
+        title: 'خطا', 
+        description: 'مشکلی در پردازش سفارشات پیش آمد', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   return (
-    <div className="min-h-screen">
+    <>
       <Header />
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold">
-            مدیریت <span className="gradient-primary bg-clip-text text-transparent">سفارشات</span>
-          </h1>
-          <Link to="/admin">
-            <Button variant="outline" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              بازگشت به پنل
+      <div className="flex min-h-screen bg-background">
+        <AdminSidebar />
+        
+        <main className="mr-64 flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="text-4xl font-bold">
+                  مدیریت <span className="gradient-primary bg-clip-text text-transparent">سفارشات</span>
+                </h1>
+                <p className="text-muted-foreground">مشاهده و مدیریت سفارشات مشتریان</p>
+              </div>
+              <Button variant="hero" onClick={handleProcessPendingOrders} className="gap-2">
+                <Link2 className="h-4 w-4" />
+                پردازش سفارشات در انتظار
             </Button>
-          </Link>
-        </div>
+          </div>
 
         <Card className="glass-card border-primary/20">
           <CardContent className="p-6">
@@ -432,8 +632,29 @@ export default function AdminOrders() {
                         <div className="flex-1">
                           <p className="font-medium">{item.products.name}</p>
                           <p className="text-sm text-muted-foreground">تعداد: {item.quantity}</p>
-                          {item.credentials ? (
-                            <Badge variant="default" className="mt-1">اعتبارنامه اختصاص داده شده</Badge>
+                          {(item.credentials || item.credential_data) ? (
+                            <div className="flex gap-2 items-center mt-2">
+                              <Badge variant="default">اعتبارنامه اختصاص داده شده</Badge>
+                              <Link to={`/admin/credentials/${item.id}`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  مشاهده اعتبارنامه
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => handleDetachCredential(item.id)}
+                              >
+                                <Link2 className="h-3 w-3" />
+                                جدا کردن
+                              </Button>
+                            </div>
                           ) : (
                             <Button
                               variant="outline"
@@ -486,8 +707,9 @@ export default function AdminOrders() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </main>
-      <Footer />
     </div>
+    </>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Product {
@@ -20,9 +19,16 @@ interface Product {
   name: string;
 }
 
+interface ProductPlan {
+  id: string;
+  name: string;
+  product_id: string;
+}
+
 interface Credential {
   id: string;
   product_id: string;
+  plan_id: string | null;
   username: string;
   password: string;
   additional_info: any;
@@ -31,6 +37,7 @@ interface Credential {
   max_seats: number;
   totp_secret: string | null;
   products: { name: string };
+  product_plans?: { name: string } | null;
 }
 
 interface Seat {
@@ -48,6 +55,7 @@ interface Seat {
 export default function AdminProductCredentials() {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [plans, setPlans] = useState<ProductPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
@@ -55,6 +63,7 @@ export default function AdminProductCredentials() {
   const [selectedCredentialSeats, setSelectedCredentialSeats] = useState<Seat[]>([]);
   const [formData, setFormData] = useState({
     product_id: '',
+    plan_id: 'none',
     username: '',
     password: '',
     additional_info: '',
@@ -71,7 +80,7 @@ export default function AdminProductCredentials() {
     const [credentialsRes, productsRes] = await Promise.all([
       supabase
         .from('product_credentials')
-        .select('*, products(name)')
+        .select('*, products(name), product_plans(name)')
         .order('created_at', { ascending: false }),
       supabase.from('products').select('id, name').order('name')
     ]);
@@ -79,6 +88,17 @@ export default function AdminProductCredentials() {
     if (credentialsRes.data) setCredentials(credentialsRes.data as any);
     if (productsRes.data) setProducts(productsRes.data);
     setLoading(false);
+  };
+
+  const loadPlansForProduct = async (productId: string) => {
+    const { data } = await supabase
+      .from('product_plans')
+      .select('id, name, product_id')
+      .eq('product_id', productId)
+      .eq('is_available', true)
+      .order('sort_order');
+    
+    setPlans(data || []);
   };
 
   const handleSubmit = async () => {
@@ -89,6 +109,7 @@ export default function AdminProductCredentials() {
 
     const payload = {
       product_id: formData.product_id,
+      plan_id: formData.plan_id && formData.plan_id !== 'none' ? formData.plan_id : null,
       username: formData.username,
       password: formData.password,
       additional_info: formData.additional_info ? JSON.parse(formData.additional_info) : {},
@@ -104,12 +125,14 @@ export default function AdminProductCredentials() {
     }
 
     if (error) {
-      toast({ title: 'خطا', description: 'عملیات انجام نشد', variant: 'destructive' });
+      console.error('Error saving credential:', error);
+      toast({ title: 'خطا', description: error.message || 'عملیات انجام نشد', variant: 'destructive' });
     } else {
       toast({ title: 'موفق', description: editingCredential ? 'به‌روزرسانی شد' : 'اعتبارنامه اضافه شد' });
       setDialogOpen(false);
       setEditingCredential(null);
-      setFormData({ product_id: '', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' });
+      setFormData({ product_id: '', plan_id: 'none', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' });
+      setPlans([]);
       loadData();
     }
   };
@@ -118,12 +141,15 @@ export default function AdminProductCredentials() {
     setEditingCredential(cred);
     setFormData({
       product_id: cred.product_id,
+      plan_id: cred.plan_id || 'none',
       username: cred.username,
       password: cred.password,
       additional_info: JSON.stringify(cred.additional_info || {}, null, 2),
       max_seats: (cred.max_seats || 1).toString(),
       totp_secret: cred.totp_secret || ''
     });
+    // Load plans for the product
+    loadPlansForProduct(cred.product_id);
     setDialogOpen(true);
   };
 
@@ -207,30 +233,33 @@ export default function AdminProductCredentials() {
   };
 
   return (
-    <div className="min-h-screen">
+    <>
       <Header />
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold">
-            مدیریت <span className="gradient-primary bg-clip-text text-transparent">اعتبارنامه‌ها</span>
-          </h1>
-          <div className="flex gap-3">
-            <Button onClick={() => { setEditingCredential(null); setDialogOpen(true); }} className="gap-2">
+      <div className="flex min-h-screen bg-background">
+        <AdminSidebar />
+        <main className="mr-64 flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">
+                  مدیریت <span className="gradient-primary bg-clip-text text-transparent">اعتبارنامه‌ها</span>
+                </h1>
+                <p className="text-muted-foreground">مدیریت اعتبارنامه‌های محصولات</p>
+              </div>
+              <Button onClick={() => { 
+                setEditingCredential(null); 
+                setFormData({ product_id: '', plan_id: 'none', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' });
+                setPlans([]);
+              setDialogOpen(true); 
+            }} variant="hero" className="gap-2">
               <Plus className="h-4 w-4" />
               افزودن اعتبارنامه
             </Button>
-            <Link to="/admin">
-              <Button variant="outline" className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                بازگشت به پنل
-              </Button>
-            </Link>
           </div>
-        </div>
 
-        <Card className="glass-card border-primary/20">
-          <CardContent className="p-6">
-            {loading ? (
+          <Card className="glass-card border-primary/20">
+            <CardContent className="p-6">
+              {loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
               </div>
@@ -239,6 +268,7 @@ export default function AdminProductCredentials() {
                 <TableHeader dir="rtl">
                   <TableRow>
                     <TableHead className="text-right">محصول</TableHead>
+                    <TableHead className="text-right">پلن</TableHead>
                     <TableHead className="text-right">نام کاربری</TableHead>
                     <TableHead className="text-right">رمز عبور</TableHead>
                     <TableHead className="text-right">تعداد صندلی</TableHead>
@@ -252,6 +282,13 @@ export default function AdminProductCredentials() {
                   {credentials.map((cred) => (
                     <TableRow key={cred.id}>
                       <TableCell className="font-medium">{cred.products.name}</TableCell>
+                      <TableCell>
+                        {cred.product_plans?.name ? (
+                          <Badge variant="outline">{cred.product_plans.name}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">همه پلن‌ها</span>
+                        )}
+                      </TableCell>
                       <TableCell>{cred.username}</TableCell>
                       <TableCell>••••••••</TableCell>
                       <TableCell>{cred.max_seats || 1}</TableCell>
@@ -305,7 +342,14 @@ export default function AdminProductCredentials() {
           </CardContent>
         </Card>
 
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setEditingCredential(null); setFormData({ product_id: '', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' }); }}}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { 
+          setDialogOpen(open); 
+          if (!open) { 
+            setEditingCredential(null); 
+            setFormData({ product_id: '', plan_id: 'none', username: '', password: '', additional_info: '', max_seats: '1', totp_secret: '' }); 
+            setPlans([]);
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingCredential ? 'ویرایش اعتبارنامه' : 'افزودن اعتبارنامه جدید'}</DialogTitle>
@@ -314,7 +358,13 @@ export default function AdminProductCredentials() {
             <div className="space-y-4">
               <div>
                 <Label>محصول</Label>
-                <Select value={formData.product_id} onValueChange={(value) => setFormData({ ...formData, product_id: value })}>
+                <Select 
+                  value={formData.product_id} 
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, product_id: value, plan_id: 'none' });
+                    loadPlansForProduct(value);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="انتخاب محصول" />
                   </SelectTrigger>
@@ -327,6 +377,32 @@ export default function AdminProductCredentials() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {formData.product_id && (
+                <div>
+                  <Label>پلن (اختیاری)</Label>
+                  <Select 
+                    value={formData.plan_id || 'none'} 
+                    onValueChange={(value) => setFormData({ ...formData, plan_id: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="همه پلن‌ها (بدون محدودیت)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">همه پلن‌ها</SelectItem>
+                      {plans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    اگر پلن خاصی انتخاب نکنید، این اعتبارنامه برای تمام پلن‌های محصول استفاده می‌شود
+                  </p>
+                </div>
+              )}
+              
               <div>
                 <Label>نام کاربری</Label>
                 <Input
@@ -416,8 +492,9 @@ export default function AdminProductCredentials() {
             </Table>
           </DialogContent>
         </Dialog>
+        </div>
       </main>
-      <Footer />
     </div>
+    </>
   );
 }
